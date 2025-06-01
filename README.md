@@ -1,6 +1,7 @@
 # sw_easicamera
 # 希沃视频展台专业版
-
+## 下载 download
+[releases] https://github.com/wwcrdrvf6u/sw_easicamera/releases/tag/easicamera
 ## 软件介绍
 
 希沃视频展台专业版是一款专为教育场景设计的视频展示工具，集成了实时摄像头展示、图像批注、梯形校正、画面调节和扫描功能。软件特别优化了触控操作体验，支持全屏模式，方便教师在教学过程中展示实物、批注重点内容。
