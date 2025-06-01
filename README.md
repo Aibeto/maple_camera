@@ -1,5 +1,5 @@
 # sw_easicamera
-# 希沃视频展台专业版
+# 希沃视频展台（我写的）
 ## 下载 download
 [releases] https://github.com/wwcrdrvf6u/sw_easicamera/releases/tag/easicamera
 ## 软件介绍
