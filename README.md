@@ -19,7 +19,7 @@
 ## 文件目录结构
 
 ```
-希沃视频展台专业版/
+EasiCamera【版本号】/
 ├── easicamera.py                # 主程序文件
 ├── config.json                  # 配置文件（自动生成）
 ├── boot.JPG                     # 启动画面图片
@@ -80,7 +80,7 @@
 ## 运行要求
 - Python 3.6+
 - 依赖库：`opencv-python`, `numpy`, `PySide2`
-- 操作系统：Windows/macOS/Linux
+- 操作系统：Windows7、10、11/macOS/Linux
 
 ## 安装指南
 1. 安装Python 3.6或更高版本
@@ -91,5 +91,3 @@
 4. 运行主程序：
       python easicamera.py
    
-
-这款软件特别适合教育场景，帮助教师清晰地展示教材、实验过程和学生作品，提升课堂教学效果。
