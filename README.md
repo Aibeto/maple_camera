@@ -1,4 +1,3 @@
-# sw_easicamera
 # 希沃视频展台（我写的）
 ## 下载 download
 [releases] https://github.com/wwcrdrvf6u/sw_easicamera/releases/tag/easicamera
@@ -20,28 +19,29 @@
 
 ```
 EasiCamera【版本号】/
-├── easicamera.py                # 主程序文件
-├── config.json                  # 配置文件（自动生成）
-├── boot.JPG                     # 启动画面图片
-├── icons/                       # 工具图标目录
-│   ├── adjust.png               # 画面调节图标
-│   ├── capture.png              # 拍照图标
-│   ├── clear.png                # 清除图标
-│   ├── correction.png           # 梯形校正图标
-│   ├── eraser.png               # 橡皮擦图标
-│   ├── exit.png                 # 退出图标
-│   ├── minimize.png             # 最小化图标
-│   ├── move.png                 # 移动工具图标
-│   ├── pen.png                  # 画笔图标
-│   ├── photos.png               # 照片库图标
-│   ├── save.png                 # 保存图标
-│   ├── scan.png                 # 扫描图标
-│   ├── settings.png             # 画笔设置图标
-│   ├── switch_camera.png        # 切换摄像头图标
-│   └── undo.png                 # 撤回图标
-└── captures/                    # 捕获照片存储目录（可选）
-    ├── 20231015_093045.jpg      # 示例捕获的照片
-    └── scan_20231015_093512.jpg # 示例扫描的照片
+├── easicamera.py             # 主程序文件
+├── boot.JPG                  # 启动背景图片
+├── config.json               # 配置文件（程序运行后生成）
+├── icons/                    # 图标目录
+│   ├── pen.png               # 画笔图标
+│   ├── switch_camera.png     # 切换摄像头图标
+│   ├── capture.png           # 拍照图标
+│   ├── save.png              # 保存图标
+│   ├── move.png              # 移动工具图标
+│   ├── eraser.png            # 橡皮擦图标
+│   ├── clear.png             # 清除图标
+│   ├── undo.png              # 撤回图标
+│   ├── settings.png          # 设置图标（画笔设置）
+│   ├── correction.png        # 梯形校正图标
+│   ├── adjust.png            # 画面调节图标
+│   ├── photos.png            # 照片库图标
+│   ├── minimize.png          # 最小化图标
+│   ├── exit.png              # 退出图标
+│   └── scan.png              # 应用图标（窗口图标）
+└── captures/                 # 照片保存目录（程序运行时自动创建）
+    ├── capture_20231025_143022.png
+    ├── capture_20231025_143145.jpg
+    └── ...
 ```
 
 ## 使用说明
