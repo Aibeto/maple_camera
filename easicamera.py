@@ -14,10 +14,10 @@ from PySide2.QtWidgets import (QApplication, QMainWindow, QLabel, QVBoxLayout, Q
                             QDialog, QGridLayout, QGroupBox, QScrollArea, QFrame, 
                             QListWidget, QListWidgetItem, QSplitter, QDockWidget, 
                             QCheckBox, QSpinBox, QDoubleSpinBox, QButtonGroup, QRadioButton,
-                            QSizeGrip, QComboBox, QMenu, QLineEdit)
+                            QSizeGrip, QComboBox, QMenu)
 from PySide2.QtGui import (QImage, QPixmap, QPainter, QPen, QColor, QFont, QIcon, 
                          QTransform, QKeySequence, QPalette, QBrush, QMouseEvent,
-                         QPainterPath, QRegion, QCursor, QFontMetrics, QIntValidator)
+                         QPainterPath, QRegion, QCursor, QFontMetrics, QPainter, QPaintEvent)
 from PySide2.QtCore import Qt, QTimer, QPointF, QEvent, QSize, QRect, QPoint, QCoreApplication, Signal, QThread, QObject
 
 # 高DPI适配
@@ -31,110 +31,23 @@ if platform.system() == "Windows":
 QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 QCoreApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
-class SplashScreen(QWidget):
-    """启动图界面"""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        
-        # 创建主布局
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        
-        # 创建标签显示启动图
-        self.splash_label = QLabel(self)
-        self.splash_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.splash_label)
-        
-        # 设置窗口大小
-        self.resize(800, 600)
-        
-        # 加载启动图
-        self.load_splash_image()
-        
-        # 设置窗口位置居中
-        self.center_on_screen()
-    
-    def center_on_screen(self):
-        """将窗口居中显示"""
-        screen = QApplication.primaryScreen().geometry()
-        window_rect = self.frameGeometry()
-        window_rect.moveCenter(screen.center())
-        self.move(window_rect.topLeft())
-    
-    def load_splash_image(self):
-        """加载启动图并缩放适应屏幕"""
-        try:
-            splash_pixmap = QPixmap("boot.JPG")
-            if not splash_pixmap.isNull():
-                # 获取屏幕尺寸
-                screen_size = QApplication.primaryScreen().size()
-                max_width = screen_size.width() * 0.5  # 最大宽度为屏幕宽度的50%
-                max_height = screen_size.height() * 0.5  # 最大高度为屏幕高度的50%
-                
-                # 按比例缩放
-                scaled_pixmap = splash_pixmap.scaled(
-                    max_width, max_height, 
-                    Qt.KeepAspectRatio, 
-                    Qt.SmoothTransformation
-                )
-                
-                # 设置启动图
-                self.splash_label.setPixmap(scaled_pixmap)
-                
-                # 调整窗口大小以适应图像
-                self.resize(scaled_pixmap.size())
-            else:
-                # 创建默认启动图
-                default_pixmap = QPixmap(800, 600)
-                default_pixmap.fill(Qt.darkGray)
-                painter = QPainter(default_pixmap)
-                painter.setPen(Qt.white)
-                painter.setFont(QFont("Arial", 24))
-                painter.drawText(default_pixmap.rect(), Qt.AlignCenter, "希沃视频展台")
-                painter.end()
-                self.splash_label.setPixmap(default_pixmap)
-        except Exception as e:
-            print(f"加载启动图错误: {e}")
-            # 创建错误启动图
-            error_pixmap = QPixmap(800, 600)
-            error_pixmap.fill(Qt.darkRed)
-            painter = QPainter(error_pixmap)
-            painter.setPen(Qt.white)
-            painter.setFont(QFont("Arial", 18))
-            painter.drawText(error_pixmap.rect(), Qt.AlignCenter, f"无法加载启动图\n{str(e)}")
-            painter.end()
-            self.splash_label.setPixmap(error_pixmap)
-
 class CameraInitThread(QThread):
     """摄像头初始化线程"""
-    finished = Signal(object)  # 修改为传递cap对象
+    finished = Signal(object)  # 返回摄像头对象
     error = Signal(str)
     
-    def __init__(self, camera_index, width=None, height=None, parent=None):
+    def __init__(self, camera_index, parent=None):
         super().__init__(parent)
         self.camera_index = camera_index
-        self.width = width
-        self.height = height
     
     def run(self):
+        cap = None
         try:
             # 尝试多种分辨率
-            resolutions = [
-                (self.width, self.height) if self.width and self.height else (1280, 720),
-                (1280, 720), 
-                (640, 480), 
-                (320, 240)
-            ]
-            cap = None
+            resolutions = [(1920, 1080), (1280, 720), (640, 480)]
             
             for res in resolutions:
                 try:
-                    if res[0] is None or res[1] is None:
-                        continue
-                        
                     if platform.system() == "Windows":
                         cap = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
                     else:
@@ -162,753 +75,431 @@ class CameraInitThread(QThread):
             self.error.emit(f"无法初始化摄像头 {self.camera_index}")
         except Exception as e:
             self.error.emit(f"摄像头初始化错误: {str(e)}")
+            if cap:
+                cap.release()
 
 class ColorWidthDialog(QDialog):
-    """画笔设置对话框 - 修改为实时保存，添加预设颜色"""
-    def __init__(self, parent=None, current_color=QColor(255, 0, 0), current_width=8):
+    """画笔设置对话框"""
+    def __init__(self, parent=None, current_color=QColor(255, 0, 0), current_width=3):  # 默认粗细改为3px
         super().__init__(parent)
         self.setWindowTitle("画笔设置")
         self.setWindowIcon(QIcon("icons/pen.png"))
-        self.setFixedSize(400, 400)  # 增大尺寸以容纳预设颜色
-        
-        self.parent = parent  # 保存父窗口引用
+        self.setFixedSize(300, 200)
         
         layout = QVBoxLayout()
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(15)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
         
         # 颜色选择部分
         color_group = QGroupBox("颜色")
-        color_group.setStyleSheet("QGroupBox { font-weight: bold; }")
-        color_layout = QVBoxLayout()
-        color_layout.setContentsMargins(10, 15, 10, 15)
+        color_layout = QHBoxLayout()
+        color_layout.setContentsMargins(5, 10, 5, 10)
         
-        # 预设颜色网格
-        preset_layout = QGridLayout()
-        preset_layout.setSpacing(10)
+        self.color_btn = QPushButton()
+        self.color_btn.setFixedSize(40, 40)
+        self.set_button_color(current_color)
+        self.color_btn.clicked.connect(self.select_color)
+        color_layout.addWidget(self.color_btn)
         
-        # 常用颜色列表
-        self.preset_colors = [
-            QColor(255, 0, 0),    # 红色
-            QColor(0, 0, 255),    # 蓝色
-            QColor(0, 255, 0),    # 绿色
-            QColor(255, 255, 0),  # 黄色
-            QColor(255, 0, 255),  # 紫色
-            QColor(0, 255, 255),  # 青色
-            QColor(255, 165, 0),  # 橙色
-            QColor(128, 0, 128),  # 深紫
-            QColor(0, 0, 0),      # 黑色
-        ]
-        
-        # 创建颜色按钮
-        self.color_buttons = []
-        for i, color in enumerate(self.preset_colors):
-            btn = QPushButton()
-            btn.setFixedSize(40, 40)
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {color.name()};
-                    border-radius: 20px;
-                    border: 2px solid #cccccc;
-                }}
-                QPushButton:hover {{
-                    border: 2px solid #3498db;
-                }}
-            """)
-            btn.clicked.connect(lambda checked, c=color: self.select_preset_color(c))
-            preset_layout.addWidget(btn, i // 3, i % 3)
-            self.color_buttons.append(btn)
-        
-        color_layout.addLayout(preset_layout)
-        
-        # 其他颜色按钮
-        other_color_btn = QPushButton("其他颜色...")
-        other_color_btn.setFixedHeight(40)
-        other_color_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
+        # 颜色值标签
+        self.color_label = QLabel(current_color.name())
+        self.color_label.setFixedHeight(30)
+        self.color_label.setAlignment(Qt.AlignCenter)
+        self.color_label.setStyleSheet(f"""
+            QLabel {{
+                background-color: {current_color.name()};
                 color: white;
-                border-radius: 8px;
-                font-weight: bold;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
+                border-radius: 5px;
+                font-size: 12px;
+                padding: 3px;
+            }}
         """)
-        other_color_btn.clicked.connect(self.select_custom_color)
-        color_layout.addWidget(other_color_btn)
-        
-        # 当前颜色显示
-        self.color_display = QLabel()
-        self.color_display.setFixedHeight(40)
-        self.color_display.setAlignment(Qt.AlignCenter)
-        self.set_color_display(current_color)
-        color_layout.addWidget(self.color_display)
-        
+        color_layout.addWidget(self.color_label)
         color_group.setLayout(color_layout)
-        layout.addWidget(color_group)
         
         # 画笔粗细部分
         width_group = QGroupBox("画笔粗细")
-        width_group.setStyleSheet("QGroupBox { font-weight: bold; }")
         width_layout = QVBoxLayout()
-        width_layout.setContentsMargins(10, 15, 10, 10)
+        width_layout.setContentsMargins(5, 10, 5, 5)
         
         self.width_slider = QSlider(Qt.Horizontal)
-        self.width_slider.setRange(3, 20)
+        self.width_slider.setRange(1, 15)  # 范围1-15px
         self.width_slider.setValue(current_width)
-        self.width_slider.valueChanged.connect(self.width_changed)
-        self.width_slider.setStyleSheet("""
-            QSlider::groove:horizontal {
-                height: 8px;
-                background: #e0e0e0;
-                border-radius: 4px;
-            }
-            QSlider::handle:horizontal {
-                width: 20px;
-                background: #3498db;
-                border-radius: 10px;
-                margin: -6px 0;
-            }
-            QSlider::sub-page:horizontal {
-                background: #3498db;
-                border-radius: 4px;
-            }
-        """)
+        self.width_slider.valueChanged.connect(self.update_width_label)
         width_layout.addWidget(self.width_slider)
         
         self.width_label = QLabel(f"当前粗细: {current_width}px")
         self.width_label.setAlignment(Qt.AlignCenter)
-        self.width_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        self.width_label.setStyleSheet("font-size: 12px;")
         width_layout.addWidget(self.width_label)
-        
         width_group.setLayout(width_layout)
-        layout.addWidget(width_group)
         
-        # 关闭按钮
-        close_btn = QPushButton("关闭")
-        close_btn.setFixedHeight(40)
-        close_btn.setStyleSheet("""
+        # 按钮区域
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
+        
+        ok_btn = QPushButton("确定")
+        ok_btn.setFixedHeight(30)
+        ok_btn.setStyleSheet("""
             QPushButton {
                 background-color: #3498db;
                 color: white;
-                border-radius: 8px;
-                font-weight: bold;
-                font-size: 14px;
+                border-radius: 5px;
+                font-size: 12px;
             }
             QPushButton:hover {
                 background-color: #2980b9;
             }
         """)
-        close_btn.clicked.connect(self.accept)
-        layout.addWidget(close_btn)
+        ok_btn.clicked.connect(self.accept)
         
+        cancel_btn = QPushButton("取消")
+        cancel_btn.setFixedHeight(30)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                border-radius: 5px;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+        """)
+        cancel_btn.clicked.connect(self.reject)
+        
+        btn_layout.addWidget(ok_btn)
+        btn_layout.addWidget(cancel_btn)
+        
+        # 添加到主布局
+        layout.addWidget(color_group)
+        layout.addWidget(width_group)
+        layout.addLayout(btn_layout)
         self.setLayout(layout)
         
         # 存储当前设置
         self.selected_color = current_color
         self.selected_width = current_width
     
-    def set_color_display(self, color):
-        """设置颜色显示"""
-        self.selected_color = color
-        self.color_display.setStyleSheet(f"""
-            QLabel {{
+    def set_button_color(self, color):
+        """设置按钮颜色"""
+        self.color_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: {color.name()};
-                color: white;
-                border-radius: 8px;
-                font-weight: bold;
-                font-size: 14px;
-                padding: 5px;
+                border: 1px solid #cccccc;
+                border-radius: 20px;
+            }}
+            QPushButton:hover {{
+                border: 1px solid #3498db;
             }}
         """)
-        self.color_display.setText(color.name())
-        
-        # 实时更新父窗口设置
-        if self.parent:
-            self.parent.pen_color = color
-            self.parent.pen_width = self.selected_width
     
-    def select_preset_color(self, color):
-        """选择预设颜色"""
-        self.set_color_display(color)
-    
-    def select_custom_color(self):
-        """选择自定义颜色"""
+    def select_color(self):
+        """选择颜色"""
         color = QColorDialog.getColor(self.selected_color, self)
         if color.isValid():
-            self.set_color_display(color)
+            self.selected_color = color
+            self.set_button_color(color)
+            self.color_label.setText(color.name())
+            self.color_label.setStyleSheet(f"""
+                QLabel {{
+                    background-color: {color.name()};
+                    color: white;
+                    border-radius: 5px;
+                    font-size: 12px;
+                    padding: 3px;
+                }}
+            """)
     
-    def width_changed(self, width):
-        """宽度改变事件"""
+    def update_width_label(self, width):
+        """更新粗细标签"""
         self.selected_width = width
         self.width_label.setText(f"当前粗细: {width}px")
-        
-        # 实时更新父窗口设置
-        if self.parent:
-            self.parent.pen_width = width
-            self.parent.pen_color = self.selected_color
+    
+    def get_settings(self):
+        """获取设置"""
+        return self.selected_color, self.selected_width
 
 class PerspectiveCorrectionDialog(QDialog):
-    """梯形校正对话框 - 修复点显示问题"""
-    def __init__(self, parent=None, image_size=(640, 480)):
+    """梯形校正对话框"""
+    def __init__(self, parent=None, points=None, background_pixmap=None, resolution=(1920, 1080)):
         super().__init__(parent)
         self.setWindowTitle("梯形校正")
-        self.setWindowIcon(QIcon("icons/correction.png"))
-        self.setFixedSize(900, 700)
+        self.setFixedSize(800, 600)
         
-        self.image_size = image_size
-        # 初始点位置改为基于图像大小的百分比
-        self.correction_points = [
-            QPoint(int(image_size[0]*0.1), int(image_size[1]*0.1)),  # 左上
-            QPoint(int(image_size[0]*0.9), int(image_size[1]*0.1)),  # 右上
-            QPoint(int(image_size[0]*0.9), int(image_size[1]*0.9)),  # 右下
-            QPoint(int(image_size[0]*0.1), int(image_size[1]*0.9))   # 左下
+        # 默认校正点（归一化坐标）
+        default_points = [
+            QPointF(0.1, 0.1), 
+            QPointF(0.9, 0.1), 
+            QPointF(0.9, 0.9), 
+            QPointF(0.1, 0.9)
         ]
-        self.active_point = -1
-        self.correction_matrix = None
-        self.dragging = False
         
-        # 创建主布局
+        self.points = points if points else default_points
+        self.resolution = resolution
+        self.selected_point = -1
+        self.point_radius = 10
+        self.background_pixmap = background_pixmap
+        
         layout = QVBoxLayout()
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(15)
+        self.setLayout(layout)
         
-        # 说明标签
-        info_label = QLabel("拖动四个角点进行梯形校正，点1:左上, 点2:右上, 点3:右下, 点4:左下")
-        info_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #3498db;")
-        layout.addWidget(info_label)
-        
-        # 滚动区域
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setMinimumSize(700, 500)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: none;
-            }
-            QScrollBar:vertical {
-                background: #2c3e50;
-                width: 14px;
-                margin: 0px 0px 0px 0px;
-                border-radius: 7px;
-            }
-            QScrollBar::handle:vertical {
-                background: #3498db;
-                min-height: 30px;
-                border-radius: 7px;
-            }
-        """)
-        
-        # 图像显示区域
+        # 显示区域
         self.image_label = QLabel()
         self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setMinimumSize(image_size[0] + 100, image_size[1] + 100)
-        self.image_label.setStyleSheet("""
-            QLabel {
-                background-color: #1e1e1e;
-                border: 2px solid #3498db;
-                border-radius: 8px;
-            }
-        """)
-        self.image_label.mousePressEvent = self.handle_mouse_press
-        self.image_label.mouseMoveEvent = self.handle_mouse_move
-        self.image_label.mouseReleaseEvent = self.handle_mouse_release
+        self.image_label.setMinimumSize(600, 400)
+        self.image_label.setStyleSheet("background-color: #2c2c2c; border: 1px solid #444;")
+        layout.addWidget(self.image_label)
         
-        scroll_area.setWidget(self.image_label)
-        layout.addWidget(scroll_area)
-        
-        # 控制区域
-        control_layout = QHBoxLayout()
-        control_layout.setSpacing(15)
-        
-        # 重置按钮
-        reset_btn = QPushButton("重置校正点")
-        reset_btn.setFixedHeight(40)
-        reset_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #e67e22;
-                color: white;
-                border-radius: 8px;
-                font-weight: bold;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: #d35400;
-            }
-        """)
-        reset_btn.clicked.connect(self.reset_points)
-        control_layout.addWidget(reset_btn)
-        
-        # 应用按钮
-        apply_btn = QPushButton("应用校正")
-        apply_btn.setFixedHeight(40)
-        apply_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                border-radius: 8px;
-                font-weight: bold;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-        """)
-        apply_btn.clicked.connect(self.accept)
-        control_layout.addWidget(apply_btn)
-        
-        # 取消按钮
-        cancel_btn = QPushButton("取消")
-        cancel_btn.setFixedHeight(40)
-        cancel_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #e74c3c;
-                color: white;
-                border-radius: 8px;
-                font-weight: bold;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: #c0392b;
-            }
-        """)
-        cancel_btn.clicked.connect(self.reject)
-        control_layout.addWidget(cancel_btn)
-        
-        # 添加到主布局
-        layout.addLayout(control_layout)
-        self.setLayout(layout)
-    
-    def set_image(self, pixmap):
-        """设置图像并绘制校正点"""
-        self.original_pixmap = pixmap.copy()
-        self.update_display()
-    
-    def update_display(self):
-        """更新显示（绘制校正点） - 确保所有点可见"""
-        if self.original_pixmap is None:
-            return
-            
-        pixmap = self.original_pixmap.copy()
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.Antialiasing)
-        
-        # 绘制校正点
-        point_colors = [QColor(255, 0, 0), QColor(0, 255, 0), QColor(0, 0, 255), QColor(255, 255, 0)]
-        point_names = ["左上", "右上", "右下", "左下"]
-        
-        for i, point in enumerate(self.correction_points):
-            # 确保点在图像范围内
-            if point.x() < 0: point.setX(0)
-            if point.y() < 0: point.setY(0)
-            if point.x() >= pixmap.width(): point.setX(pixmap.width()-1)
-            if point.y() >= pixmap.height(): point.setY(pixmap.height()-1)
-            
-            pen = QPen(point_colors[i])
-            pen.setWidth(3)
-            painter.setPen(pen)
-            painter.setBrush(QBrush(point_colors[i]))
-            painter.drawEllipse(point, 10, 10)
-            
-            # 绘制点编号和名称
-            painter.setPen(QPen(Qt.white))
-            painter.setFont(QFont("Arial", 12, QFont.Bold))
-            painter.drawText(point.x() - 15, point.y() - 20, f"{i+1}:{point_names[i]}")
-        
-        # 绘制连接线
-        pen = QPen(QColor(255, 165, 0))  # 橙色
-        pen.setWidth(2)
-        pen.setStyle(Qt.DashLine)
-        painter.setPen(pen)
-        
-        for i in range(4):
-            painter.drawLine(self.correction_points[i], self.correction_points[(i+1)%4])
-        
-        painter.end()
-        
-        # 显示图像
-        self.image_label.setPixmap(pixmap)
-        self.image_label.adjustSize()
-    
-    def handle_mouse_press(self, event):
-        """处理鼠标按下事件"""
-        pos = event.pos()
-        
-        # 获取图像在label中的实际位置
-        pixmap = self.image_label.pixmap()
-        if pixmap is None:
-            return
-            
-        label_size = self.image_label.size()
-        pixmap_size = pixmap.size()
-        x_offset = (label_size.width() - pixmap_size.width()) // 2
-        y_offset = (label_size.height() - pixmap_size.height()) // 2
-        
-        # 转换为图像坐标
-        img_pos = QPoint(pos.x() - x_offset, pos.y() - y_offset)
-        
-        # 检查是否点击了校正点
-        for i, point in enumerate(self.correction_points):
-            if (point - img_pos).manhattanLength() < 15:
-                self.active_point = i
-                self.dragging = True
-                return
-    
-    def handle_mouse_move(self, event):
-        """处理鼠标移动事件"""
-        if self.dragging and self.active_point >= 0:
-            pos = event.pos()
-            
-            # 获取图像在label中的实际位置
-            pixmap = self.image_label.pixmap()
-            if pixmap is None:
-                return
-                
-            label_size = self.image_label.size()
-            pixmap_size = pixmap.size()
-            x_offset = (label_size.width() - pixmap_size.width()) // 2
-            y_offset = (label_size.height() - pixmap_size.height()) // 2
-            
-            # 转换为图像坐标
-            img_pos = QPoint(pos.x() - x_offset, pos.y() - y_offset)
-            
-            # 更新点位置
-            self.correction_points[self.active_point] = img_pos
-            self.update_display()
-    
-    def handle_mouse_release(self, event):
-        """处理鼠标释放事件"""
-        self.active_point = -1
-        self.dragging = False
-    
-    def reset_points(self):
-        """重置校正点到默认位置"""
-        self.correction_points = [
-            QPoint(int(self.image_size[0]*0.1), int(self.image_size[1]*0.1)),  # 左上
-            QPoint(int(self.image_size[0]*0.9), int(self.image_size[1]*0.1)),  # 右上
-            QPoint(int(self.image_size[0]*0.9), int(self.image_size[1]*0.9)),  # 右下
-            QPoint(int(self.image_size[0]*0.1), int(self.image_size[1]*0.9))   # 左下
-        ]
-        self.update_display()
-    
-    def get_correction_points(self):
-        """获取校正点坐标"""
-        return [
-            (self.correction_points[0].x(), self.correction_points[0].y()),
-            (self.correction_points[1].x(), self.correction_points[1].y()),
-            (self.correction_points[2].x(), self.correction_points[2].y()),
-            (self.correction_points[3].x(), self.correction_points[3].y())
-    ]
-    
-    def set_correction_points(self, points):
-        """设置校正点坐标"""
-        if points and len(points) == 4:
-            self.correction_points = [
-                QPoint(points[0][0], points[0][1]),
-                QPoint(points[1][0], points[1][1]),
-                QPoint(points[2][0], points[2][1]),
-                QPoint(points[3][0], points[3][1])
-            ]
-    
-    def get_correction_matrix(self, size):
-        """获取校正矩阵"""
-        # 源点（校正点）
-        src_points = np.array([
-            [self.correction_points[0].x(), self.correction_points[0].y()],
-            [self.correction_points[1].x(), self.correction_points[1].y()],
-            [self.correction_points[2].x(), self.correction_points[2].y()],
-            [self.correction_points[3].x(), self.correction_points[3].y()]
-        ], dtype=np.float32)
-        
-        # 目标点（图像边界）
-        dst_points = np.array([
-            [0, 0],
-            [size[0]-1, 0],
-            [size[0]-1, size[1]-1],
-            [0, size[1]-1]
-        ], dtype=np.float32)
-        
-        # 计算透视变换矩阵
-        matrix = cv2.getPerspectiveTransform(src_points, dst_points)
-        return matrix
-
-class ImageAdjustDialog(QDialog):
-    """图像调整对话框 - 增强亮度效果并添加分辨率设置"""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("画面调节")
-        self.setWindowIcon(QIcon("icons/adjust.png"))
-        self.setFixedSize(450, 450)  # 增加高度以容纳分辨率设置
-        
-        layout = QVBoxLayout()
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(15)
-        
-        # 亮度调整
-        brightness_group = QGroupBox("亮度/对比度调整")
-        brightness_group.setStyleSheet("QGroupBox { font-weight: bold; }")
-        brightness_layout = QVBoxLayout()
-        brightness_layout.setContentsMargins(10, 15, 10, 10)
-        
-        # 亮度滑块
-        brightness_label = QLabel("亮度:")
-        brightness_label.setStyleSheet("font-size: 14px;")
-        brightness_layout.addWidget(brightness_label)
-        
-        self.brightness_slider = QSlider(Qt.Horizontal)
-        self.brightness_slider.setRange(-100, 100)
-        self.brightness_slider.setValue(0)
-        self.brightness_slider.setStyleSheet("""
-            QSlider::groove:horizontal {
-                height: 8px;
-                background: #e0e0e0;
-                border-radius: 4px;
-            }
-            QSlider::handle:horizontal {
-                width: 20px;
-                background: #3498db;
-                border-radius: 10px;
-                margin: -6px 0;
-            }
-            QSlider::sub-page:horizontal {
-                background: #3498db;
-                border-radius: 4px;
-            }
-        """)
-        brightness_layout.addWidget(self.brightness_slider)
-        
-        self.brightness_value = QLabel("当前亮度: 0")
-        self.brightness_value.setAlignment(Qt.AlignCenter)
-        self.brightness_value.setStyleSheet("font-size: 14px; font-weight: bold;")
-        brightness_layout.addWidget(self.brightness_value)
-        
-        # 对比度滑块
-        contrast_label = QLabel("对比度:")
-        contrast_label.setStyleSheet("font-size: 14px;")
-        brightness_layout.addWidget(contrast_label)
-        
-        self.contrast_slider = QSlider(Qt.Horizontal)
-        self.contrast_slider.setRange(-100, 100)
-        self.contrast_slider.setValue(0)
-        self.contrast_slider.setStyleSheet("""
-            QSlider::groove:horizontal {
-                height: 8px;
-                background: #e0e0e0;
-                border-radius: 4px;
-            }
-            QSlider::handle:horizontal {
-                width: 20px;
-                background: #e67e22;
-                border-radius: 10px;
-                margin: -6px 0;
-            }
-            QSlider::sub-page:horizontal {
-                background: #e67e22;
-                border-radius: 4px;
-            }
-        """)
-        brightness_layout.addWidget(self.contrast_slider)
-        
-        self.contrast_value = QLabel("当前对比度: 0")
-        self.contrast_value.setAlignment(Qt.AlignCenter)
-        self.contrast_value.setStyleSheet("font-size: 14px; font-weight: bold;")
-        brightness_layout.addWidget(self.contrast_value)
-        
-        brightness_group.setLayout(brightness_layout)
-        layout.addWidget(brightness_group)
-        
-        # 旋转和镜像
-        transform_group = QGroupBox("旋转与镜像")
-        transform_group.setStyleSheet("QGroupBox { font-weight: bold; }")
-        transform_layout = QGridLayout()
-        transform_layout.setContentsMargins(10, 15, 10, 15)
-        transform_layout.setVerticalSpacing(15)
-        transform_layout.setHorizontalSpacing(15)
-        
-        # 旋转按钮
-        rotate_label = QLabel("旋转角度:")
-        rotate_label.setStyleSheet("font-size: 14px;")
-        transform_layout.addWidget(rotate_label, 0, 0)
-        
-        self.rotate_combo = QComboBox()
-        self.rotate_combo.setFixedHeight(35)
-        self.rotate_combo.setStyleSheet("""
-            QComboBox {
-                font-size: 14px;
-                padding: 5px;
-                border: 1px solid #cccccc;
-                border-radius: 5px;
-            }
-            QComboBox::drop-down {
-                width: 25px;
-            }
-        """)
-        self.rotate_combo.addItems(["0°", "90°", "180°", "270°"])
-        transform_layout.addWidget(self.rotate_combo, 0, 1)
-        
-        # 镜像按钮
-        flip_label = QLabel("镜像翻转:")
-        flip_label.setStyleSheet("font-size: 14px;")
-        transform_layout.addWidget(flip_label, 1, 0)
-        
-        self.flip_combo = QComboBox()
-        self.flip_combo.setFixedHeight(35)
-        self.flip_combo.setStyleSheet("""
-            QComboBox {
-                font-size: 14px;
-                padding: 5px;
-                border: 1px solid #cccccc;
-                border-radius: 5px;
-            }
-            QComboBox::drop-down {
-                width: 25px;
-            }
-        """)
-        self.flip_combo.addItems(["无", "水平翻转", "垂直翻转"])
-        transform_layout.addWidget(self.flip_combo, 1, 1)
-        
-        transform_group.setLayout(transform_layout)
-        layout.addWidget(transform_group)
-        
-        # 分辨率设置
-        resolution_group = QGroupBox("分辨率设置 (需重启摄像头)")
-        resolution_group.setStyleSheet("QGroupBox { font-weight: bold; }")
-        resolution_layout = QGridLayout()
-        resolution_layout.setContentsMargins(10, 15, 10, 15)
-        resolution_layout.setVerticalSpacing(10)
-        resolution_layout.setHorizontalSpacing(10)
-        
-        # 宽度输入
-        width_label = QLabel("宽度:")
-        width_label.setStyleSheet("font-size: 14px;")
-        resolution_layout.addWidget(width_label, 0, 0)
-        
-        self.width_input = QLineEdit()
-        self.width_input.setFixedHeight(35)
-        self.width_input.setValidator(QIntValidator(100, 4096))
-        self.width_input.setStyleSheet("""
-            QLineEdit {
-                font-size: 14px;
-                padding: 5px;
-                border: 1px solid #cccccc;
-                border-radius: 5px;
-            }
-        """)
-        resolution_layout.addWidget(self.width_input, 0, 1)
-        
-        # 高度输入
-        height_label = QLabel("高度:")
-        height_label.setStyleSheet("font-size: 14px;")
-        resolution_layout.addWidget(height_label, 1, 0)
-        
-        self.height_input = QLineEdit()
-        self.height_input.setFixedHeight(35)
-        self.height_input.setValidator(QIntValidator(100, 4096))
-        self.height_input.setStyleSheet("""
-            QLineEdit {
-                font-size: 14px;
-                padding: 5px;
-                border: 1px solid #cccccc;
-                border-radius: 5px;
-            }
-        """)
-        resolution_layout.addWidget(self.height_input, 1, 1)
-        
-        resolution_group.setLayout(resolution_layout)
-        layout.addWidget(resolution_group)
-        
-        # 按钮区域
+        # 控制按钮
         btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(15)
+        
+        reset_btn = QPushButton("重置")
+        reset_btn.setFixedSize(80, 30)
+        reset_btn.clicked.connect(self.reset_points)
+        btn_layout.addWidget(reset_btn)
         
         apply_btn = QPushButton("应用")
-        apply_btn.setFixedHeight(40)
-        apply_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                border-radius: 8px;
-                font-weight: bold;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-        """)
+        apply_btn.setFixedSize(80, 30)
         apply_btn.clicked.connect(self.accept)
         btn_layout.addWidget(apply_btn)
         
-        reset_btn = QPushButton("重置")
-        reset_btn.setFixedHeight(40)
-        reset_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #e67e22;
-                color: white;
-                border-radius: 8px;
-                font-weight: bold;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: #d35400;
-            }
-        """)
-        reset_btn.clicked.connect(self.reset)
-        btn_layout.addWidget(reset_btn)
-        
         cancel_btn = QPushButton("取消")
-        cancel_btn.setFixedHeight(40)
-        cancel_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #e74c3c;
-                color: white;
-                border-radius: 8px;
-                font-weight: bold;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: #c0392b;
-            }
-        """)
+        cancel_btn.setFixedSize(80, 30)
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
         
         layout.addLayout(btn_layout)
-        self.setLayout(layout)
         
-        # 连接信号
-        self.brightness_slider.valueChanged.connect(lambda v: self.brightness_value.setText(f"当前亮度: {v}"))
-        self.contrast_slider.valueChanged.connect(lambda v: self.contrast_value.setText(f"当前对比度: {v}"))
+        # 创建示例图像
+        self.update_example_image()
+        
+        # 安装事件过滤器
+        self.image_label.installEventFilter(self)
     
-    def reset(self):
-        """重置所有设置"""
-        self.brightness_slider.setValue(0)
-        self.contrast_slider.setValue(0)
-        self.rotate_combo.setCurrentIndex(0)
-        self.flip_combo.setCurrentIndex(0)
-        self.width_input.clear()
-        self.height_input.clear()
+    def update_example_image(self):
+        """更新示例图像（使用当前视频帧作为背景）"""
+        img = QImage(800, 600, QImage.Format_RGB32)
+        
+        if self.background_pixmap and not self.background_pixmap.isNull():
+            # 使用当前视频帧作为背景
+            background = self.background_pixmap.scaled(
+                800, 600, Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
+            
+            # 创建临时图像用于绘制
+            img = QImage(800, 600, QImage.Format_RGB32)
+            painter = QPainter(img)
+            
+            # 绘制背景（稍微变暗以便看清网格和点）
+            painter.setOpacity(0.7)
+            painter.drawPixmap(0, 0, background)
+            painter.setOpacity(1.0)
+            
+            # 绘制网格（半透明）
+            painter.setPen(QPen(QColor(100, 100, 100, 150), 1))
+            for i in range(0, 800, 40):
+                painter.drawLine(i, 0, i, 600)
+            for i in range(0, 600, 40):
+                painter.drawLine(0, i, 800, i)
+            
+            # 绘制校正点
+            painter.setBrush(QBrush(QColor(255, 0, 0, 200)))
+            for i, point in enumerate(self.points):
+                x = int(point.x() * 800)
+                y = int(point.y() * 600)
+                painter.drawEllipse(QPoint(x, y), self.point_radius, self.point_radius)
+                painter.drawText(x + 15, y + 5, f"{i+1}")
+            
+            # 绘制连接线
+            painter.setPen(QPen(QColor(0, 255, 0, 200), 2))
+            for i in range(4):
+                x1 = int(self.points[i].x() * 800)
+                y1 = int(self.points[i].y() * 600)
+                x2 = int(self.points[(i+1)%4].x() * 800)
+                y2 = int(self.points[(i+1)%4].y() * 600)
+                painter.drawLine(x1, y1, x2, y2)
+            
+            painter.end()
+        else:
+            # 没有背景图像时使用默认灰色背景
+            img.fill(Qt.darkGray)
+            
+            painter = QPainter(img)
+            painter.setRenderHint(QPainter.Antialiasing)
+            
+            # 绘制网格
+            painter.setPen(QPen(QColor(100, 100, 100), 1))
+            for i in range(0, 800, 40):
+                painter.drawLine(i, 0, i, 600)
+            for i in range(0, 600, 40):
+                painter.drawLine(0, i, 800, i)
+            
+            # 绘制校正点
+            painter.setBrush(QBrush(QColor(255, 0, 0)))
+            for i, point in enumerate(self.points):
+                x = int(point.x() * 800)
+                y = int(point.y() * 600)
+                painter.drawEllipse(QPoint(x, y), self.point_radius, self.point_radius)
+                painter.drawText(x + 15, y + 5, f"{i+1}")
+            
+            # 绘制连接线
+            painter.setPen(QPen(QColor(0, 255, 0), 2))
+            for i in range(4):
+                x1 = int(self.points[i].x() * 800)
+                y1 = int(self.points[i].y() * 600)
+                x2 = int(self.points[(i+1)%4].x() * 800)
+                y2 = int(self.points[(i+1)%4].y() * 600)
+                painter.drawLine(x1, y1, x2, y2)
+            
+            painter.end()
+        
+        self.image_label.setPixmap(QPixmap.fromImage(img))
+    
+    def reset_points(self):
+        """重置校正点"""
+        self.points = [
+            QPointF(0.1, 0.1), 
+            QPointF(0.9, 0.1), 
+            QPointF(0.9, 0.9), 
+            QPointF(0.1, 0.9)
+        ]
+        self.update_example_image()
+    
+    def eventFilter(self, source, event):
+        """事件过滤器处理鼠标事件"""
+        if source == self.image_label:
+            if event.type() == QEvent.MouseButtonPress:
+                pos = event.pos()
+                for i, point in enumerate(self.points):
+                    img_x = int(point.x() * 800)
+                    img_y = int(point.y() * 600)
+                    if (pos - QPoint(img_x, img_y)).manhattanLength() < self.point_radius * 2:
+                        self.selected_point = i
+                        return True
+            elif event.type() == QEvent.MouseMove and self.selected_point >= 0:
+                pos = event.pos()
+                # 限制在图像范围内
+                x = max(0, min(pos.x(), 800)) / 800
+                y = max(0, min(pos.y(), 600)) / 600
+                self.points[self.selected_point] = QPointF(x, y)
+                self.update_example_image()
+                return True
+            elif event.type() == QEvent.MouseButtonRelease:
+                self.selected_point = -1
+                return True
+        return super().eventFilter(source, event)
+    
+    def get_points(self):
+        """获取校正点（实际像素坐标）"""
+        return [
+            QPointF(self.points[0].x() * self.resolution[0], self.points[0].y() * self.resolution[1]),
+            QPointF(self.points[1].x() * self.resolution[0], self.points[1].y() * self.resolution[1]),
+            QPointF(self.points[2].x() * self.resolution[0], self.points[2].y() * self.resolution[1]),
+            QPointF(self.points[3].x() * self.resolution[0], self.points[3].y() * self.resolution[1])
+        ]
+
+class ImageAdjustmentDialog(QDialog):
+    """画面调节对话框"""
+    def __init__(self, parent=None, brightness=100, contrast=100, orientation=0, flip_horizontal=False):
+        super().__init__(parent)
+        self.setWindowTitle("画面调节")
+        self.setFixedSize(400, 300)
+        
+        layout = QVBoxLayout()
+        layout.setContentsMargins(15, 15, 15, 15)
+        
+        # 亮度调节
+        brightness_group = QGroupBox("亮度")
+        brightness_layout = QVBoxLayout()
+        
+        self.brightness_slider = QSlider(Qt.Horizontal)
+        self.brightness_slider.setRange(0, 200)
+        self.brightness_slider.setValue(brightness)
+        self.brightness_slider.valueChanged.connect(self.update_brightness_label)
+        brightness_layout.addWidget(self.brightness_slider)
+        
+        self.brightness_label = QLabel(f"亮度: {brightness}%")
+        self.brightness_label.setAlignment(Qt.AlignCenter)
+        brightness_layout.addWidget(self.brightness_label)
+        brightness_group.setLayout(brightness_layout)
+        
+        # 对比度调节
+        contrast_group = QGroupBox("对比度")
+        contrast_layout = QVBoxLayout()
+        
+        self.contrast_slider = QSlider(Qt.Horizontal)
+        self.contrast_slider.setRange(0, 200)
+        self.contrast_slider.setValue(contrast)
+        self.contrast_slider.valueChanged.connect(self.update_contrast_label)
+        contrast_layout.addWidget(self.contrast_slider)
+        
+        self.contrast_label = QLabel(f"对比度: {contrast}%")
+        self.contrast_label.setAlignment(Qt.AlignCenter)
+        contrast_layout.addWidget(self.contrast_label)
+        contrast_group.setLayout(contrast_layout)
+        
+        # 方向调整
+        orientation_group = QGroupBox("方向")
+        orientation_layout = QHBoxLayout()
+        
+        self.orientation_combo = QComboBox()
+        self.orientation_combo.addItem("竖向 (0°)", 0)
+        self.orientation_combo.addItem("横向 (90°)", 90)
+        self.orientation_combo.addItem("倒立 (180°)", 180)
+        self.orientation_combo.addItem("横向 (270°)", 270)
+        self.orientation_combo.setCurrentIndex(orientation)
+        orientation_layout.addWidget(self.orientation_combo)
+        orientation_group.setLayout(orientation_layout)
+        
+        # 镜像翻转
+        flip_group = QGroupBox("镜像")
+        flip_layout = QHBoxLayout()
+        
+        self.flip_checkbox = QCheckBox("水平翻转")
+        self.flip_checkbox.setChecked(flip_horizontal)
+        flip_layout.addWidget(self.flip_checkbox)
+        flip_group.setLayout(flip_layout)
+        
+        # 按钮区域
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
+        
+        apply_btn = QPushButton("应用")
+        apply_btn.setFixedHeight(35)
+        apply_btn.clicked.connect(self.accept)
+        
+        cancel_btn = QPushButton("取消")
+        cancel_btn.setFixedHeight(35)
+        cancel_btn.clicked.connect(self.reject)
+        
+        btn_layout.addWidget(apply_btn)
+        btn_layout.addWidget(cancel_btn)
+        
+        # 添加到主布局
+        layout.addWidget(brightness_group)
+        layout.addWidget(contrast_group)
+        layout.addWidget(orientation_group)
+        layout.addWidget(flip_group)
+        layout.addLayout(btn_layout)
+        self.setLayout(layout)
+    
+    def update_brightness_label(self, value):
+        """更新亮度标签"""
+        self.brightness_label.setText(f"亮度: {value}%")
+    
+    def update_contrast_label(self, value):
+        """更新对比度标签"""
+        self.contrast_label.setText(f"对比度: {value}%")
     
     def get_settings(self):
         """获取设置"""
-        width = self.width_input.text().strip()
-        height = self.height_input.text().strip()
-        
         return {
             "brightness": self.brightness_slider.value(),
             "contrast": self.contrast_slider.value(),
-            "rotation": self.rotate_combo.currentIndex(),
-            "flip": self.flip_combo.currentIndex(),
-            "resolution": (int(width) if width else None, int(height) if height else None)
+            "orientation": self.orientation_combo.currentIndex(),
+            "flip_horizontal": self.flip_checkbox.isChecked()
         }
-    
-    def set_resolution(self, width, height):
-        """设置分辨率值"""
-        if width:
-            self.width_input.setText(str(width))
-        if height:
-            self.height_input.setText(str(height))
 
 class VideoAnnotationApp(QMainWindow):
     def __init__(self):
@@ -918,7 +509,8 @@ class VideoAnnotationApp(QMainWindow):
         self.showFullScreen()
         
         # 设置窗口标题
-        self.setWindowTitle("希沃视频展台专业版")
+        self.setWindowTitle("希沃视频展台（我写的）")
+        self.setWindowIcon(QIcon("icons/scan.png"))  # 设置窗口图标
         
         # 触控初始化
         self.setAttribute(Qt.WA_AcceptTouchEvents, True)
@@ -928,7 +520,7 @@ class VideoAnnotationApp(QMainWindow):
         self.touch_drawing = False
         
         # 性能优化配置
-        self.camera_resolution = (1280, 720)
+        self.camera_resolution = (1280, 720)  # 默认分辨率
         self.target_fps = 30
         
         # 初始化变量
@@ -937,10 +529,9 @@ class VideoAnnotationApp(QMainWindow):
         self.drawing = False
         self.last_point = None
         self.annotations = []
-        self.live_annotations = []  # 用于存储实时画面的批注
         self.current_tool = "pen"
         self.pen_color = QColor(255, 0, 0)
-        self.pen_width = 8
+        self.pen_width = 3  # 默认画笔粗细改为3px
         self.camera_active = False
         self.saved_image_path = None
         self.startup_image = None
@@ -948,29 +539,32 @@ class VideoAnnotationApp(QMainWindow):
         self.current_camera_index = -1
         self.captured_images = []
         self.current_captured_image = None
-        self.correction_points = None
-        self.correction_matrix = None
         self.photo_dock = None
         self.zoom_factor = 1.0
         self.zoom_offset = QPointF(0, 0)
         self.current_annotation = None
         self.last_touch_area = 0.0
         self.palm_threshold = 1500
-        self.image_adjust_settings = {
-            "brightness": 0,
-            "contrast": 0,
-            "rotation": 0,
-            "flip": 0,
-            "resolution": (None, None)
-        }
         self.camera_list = []
+        self.arrow_start_point = None
         self.temp_annotation = None
         self.last_draw_time = 0
         self.zoom_indicator = None
         self.zoom_indicator_timer = None
-        self.background_pixmap = None  # 用于在绘制过程中冻结实时画面
-        self.scanning = False  # 扫描状态标志
-        self.scan_timer = None  # 扫描定时器
+        self.background_frame = None
+        self.annotation_layer = None
+        self.base_image = None
+        self.perspective_points = []  # 梯形校正点
+        self.camera_names = {}  # 摄像头型号映射
+        self.image_adjustments = {  # 画面调节参数
+            "brightness": 100,
+            "contrast": 100,
+            "orientation": 0,  # 0: 竖向, 1: 横向90°, 2: 倒立180°, 3: 横向270°
+            "flip_horizontal": False
+        }
+        self.dragging = False
+        self.drag_start_pos = QPointF()
+        self.drag_current_pos = QPointF()
         
         # 加载配置
         self.load_config()
@@ -978,14 +572,17 @@ class VideoAnnotationApp(QMainWindow):
         # 创建UI
         self.init_ui()
         
-        # 启动1秒计时器，然后自动连接摄像头
+        # 显示启动图
+        self.show_startup_image()
+        
+        # 启动3秒计时器，然后自动连接摄像头
         self.startup_timer = QTimer(self)
         self.startup_timer.setSingleShot(True)
         self.startup_timer.timeout.connect(self.post_startup)
-        self.startup_timer.start(1000)
+        self.startup_timer.start(3000)  # 启动图显示3秒
     
     def post_startup(self):
-        """启动图显示1秒后执行的操作"""
+        """启动图显示3秒后执行的操作"""
         self.video_label.setPixmap(QPixmap())
         self.video_label.setStyleSheet("background-color: black;")
         self.showing_startup = False
@@ -995,13 +592,13 @@ class VideoAnnotationApp(QMainWindow):
         """加载配置文件"""
         self.config = {
             "camera_index": -1, 
-            "correction_points": None,
-            "image_adjust": {
-                "brightness": 0,
-                "contrast": 0,
-                "rotation": 0,
-                "flip": 0,
-                "resolution": (None, None)
+            "camera_name": "",
+            "perspective_points": [],
+            "image_adjustments": {
+                "brightness": 100,
+                "contrast": 100,
+                "orientation": 0,
+                "flip_horizontal": False
             }
         }
         
@@ -1010,8 +607,16 @@ class VideoAnnotationApp(QMainWindow):
                 with open("config.json", "r") as f:
                     self.config = json.load(f)
                     self.current_camera_index = self.config.get("camera_index", -1)
-                    self.correction_points = self.config.get("correction_points", None)
-                    self.image_adjust_settings = self.config.get("image_adjust", self.image_adjust_settings)
+                    
+                    # 加载梯形校正点
+                    perspective_points = self.config.get("perspective_points", [])
+                    if perspective_points:
+                        self.perspective_points = [QPointF(p['x'], p['y']) for p in perspective_points]
+                    
+                    # 加载画面调节设置
+                    adjustments = self.config.get("image_adjustments", {})
+                    if adjustments:
+                        self.image_adjustments = adjustments
         except:
             pass
     
@@ -1019,8 +624,18 @@ class VideoAnnotationApp(QMainWindow):
         """保存配置文件"""
         try:
             self.config["camera_index"] = self.current_camera_index
-            self.config["correction_points"] = self.correction_points
-            self.config["image_adjust"] = self.image_adjust_settings
+            self.config["camera_name"] = self.camera_names.get(self.current_camera_index, "")
+            
+            # 保存梯形校正点
+            if self.perspective_points and len(self.perspective_points) == 4:
+                self.config["perspective_points"] = [
+                    {"x": p.x(), "y": p.y()} for p in self.perspective_points
+                ]
+            else:
+                self.config["perspective_points"] = []
+            
+            # 保存画面调节设置
+            self.config["image_adjustments"] = self.image_adjustments
             
             with open("config.json", "w") as f:
                 json.dump(self.config, f, indent=2)
@@ -1036,16 +651,13 @@ class VideoAnnotationApp(QMainWindow):
             QDockWidget {
                 background-color: #2c3e50;
                 color: white;
-                font-size: 14px;
-                font-weight: bold;
+                font-size: 12px;
                 border: 1px solid #3498db;
-                titlebar-close-icon: url(none);
-                titlebar-normal-icon: url(none);
             }
             QDockWidget::title {
                 background-color: #2c3e50;
                 text-align: left;
-                padding-left: 10px;
+                padding-left: 8px;
             }
         """)
         
@@ -1065,8 +677,8 @@ class VideoAnnotationApp(QMainWindow):
         self.video_label.setStyleSheet("""
             QLabel {
                 background-color: #000000;
-                border: 2px solid #3498db;
-                border-radius: 8px;
+                border: 1px solid #3498db;
+                border-radius: 4px;
             }
         """)
         self.video_label.setMinimumSize(800, 600)
@@ -1076,35 +688,32 @@ class VideoAnnotationApp(QMainWindow):
         
         main_layout.addWidget(self.video_label, 1)
         
-        # 创建底部工具栏 - 修改为白色主题
+        # 创建底部工具栏
         self.toolbar = QToolBar("主工具栏")
-        self.toolbar.setIconSize(QSize(36, 36))
+        self.toolbar.setIconSize(QSize(24, 24))  # 减小图标大小
         self.toolbar.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         self.toolbar.setMovable(True)
         self.toolbar.setStyleSheet("""
             QToolBar {
-                background-color: white;
-                border-top: 2px solid #3498db;
-                padding: 6px;
-                spacing: 8px;
+                background-color: #2c3e50;
+                border-top: 1px solid #3498db;
+                padding: 4px;
+                spacing: 6px;
             }
             QToolButton {
                 background-color: white;
                 color: #2c3e50;
-                border-radius: 6px;
-                padding: 6px;
-                font-size: 11px;
-                font-weight: bold;
-                min-width: 60px;
-                min-height: 60px;
-                border: 1px solid #d0d0d0;
+                border-radius: 4px;
+                padding: 4px;
+                font-size: 10px;
+                min-width: 40px;
+                min-height: 40px;
             }
             QToolButton:hover {
-                background-color: #f0f0f0;
-                border: 1px solid #3498db;
+                background-color: #e0e0e0;
             }
             QToolButton:pressed {
-                background-color: #e0e0e0;
+                background-color: #d0d0d0;
             }
             QToolButton:checked {
                 background-color: black;
@@ -1118,34 +727,32 @@ class VideoAnnotationApp(QMainWindow):
         self.camera_menu = QMenu("选择摄像头")
         self.camera_menu.setStyleSheet("""
             QMenu {
-                background-color: white;
-                color: #2c3e50;
+                background-color: #2c3e50;
+                color: white;
                 border: 1px solid #3498db;
-                padding: 5px;
+                padding: 4px;
             }
             QMenu::item {
-                padding: 8px 30px 8px 20px;
-                background-color: transparent;
+                padding: 6px 25px 6px 15px;
             }
             QMenu::item:selected {
                 background-color: #3498db;
-                color: white;
             }
         """)
         
         # 相机选择动作
-        self.camera_action = QAction(QIcon(self.get_icon_path("switch_camera.png")), "切换摄像头", self)
+        self.camera_action = QAction(QIcon("icons/switch_camera.png"), "切换摄像头", self)
         self.camera_action.setMenu(self.camera_menu)
         self.toolbar.addAction(self.camera_action)
         
         # 拍照按钮
-        capture_action = QAction(QIcon(self.get_icon_path("capture.png")), "拍照", self)
+        capture_action = QAction(QIcon("icons/capture.png"), "拍照", self)
         capture_action.triggered.connect(self.capture_image)
         capture_action.setShortcut(QKeySequence("Space"))
         self.toolbar.addAction(capture_action)
         
         # 保存按钮
-        save_action = QAction(QIcon(self.get_icon_path("save.png")), "保存", self)
+        save_action = QAction(QIcon("icons/save.png"), "保存", self)
         save_action.triggered.connect(self.save_image)
         save_action.setShortcut(QKeySequence("Ctrl+S"))
         self.toolbar.addAction(save_action)
@@ -1153,75 +760,70 @@ class VideoAnnotationApp(QMainWindow):
         self.toolbar.addSeparator()
         
         # 画笔按钮
-        pen_action = QAction(QIcon(self.get_icon_path("pen.png")), "画笔", self)
+        pen_action = QAction(QIcon("icons/pen.png"), "画笔", self)
         pen_action.triggered.connect(lambda: self.set_tool("pen"))
         pen_action.setShortcut(QKeySequence("P"))
         pen_action.setCheckable(True)
         pen_action.setChecked(True)
         self.toolbar.addAction(pen_action)
         
-        # 移动/缩放按钮 (替换箭头按钮)
-        move_action = QAction(QIcon(self.get_icon_path("move.png")), "移动", self)
+        # 移动/缩放按钮
+        move_action = QAction(QIcon("icons/move.png"), "移动", self)
         move_action.triggered.connect(lambda: self.set_tool("move"))
         move_action.setShortcut(QKeySequence("M"))
         move_action.setCheckable(True)
         self.toolbar.addAction(move_action)
         
-        # 橡皮擦按钮 (修复：调小橡皮擦面积)
-        eraser_action = QAction(QIcon(self.get_icon_path("eraser.png")), "橡皮擦", self)
+        # 橡皮擦按钮
+        eraser_action = QAction(QIcon("icons/eraser.png"), "橡皮擦", self)
         eraser_action.triggered.connect(lambda: self.set_tool("eraser"))
         eraser_action.setShortcut(QKeySequence("E"))
         eraser_action.setCheckable(True)
         self.toolbar.addAction(eraser_action)
         
         # 清除按钮
-        clear_action = QAction(QIcon(self.get_icon_path("clear.png")), "清除", self)
+        clear_action = QAction(QIcon("icons/clear.png"), "清除", self)
         clear_action.triggered.connect(self.clear_annotations)
         clear_action.setShortcut(QKeySequence("Ctrl+D"))
         self.toolbar.addAction(clear_action)
         
         # 撤回按钮
-        undo_action = QAction(QIcon(self.get_icon_path("undo.png")), "撤回", self)
+        undo_action = QAction(QIcon("icons/undo.png"), "撤回", self)
         undo_action.triggered.connect(self.undo_annotation)
         undo_action.setShortcut(QKeySequence("Ctrl+Z"))
         self.toolbar.addAction(undo_action)
         
         self.toolbar.addSeparator()
         
-        # 梯形校正按钮
-        correction_action = QAction(QIcon(self.get_icon_path("correction.png")), "梯形校正", self)
-        correction_action.triggered.connect(self.apply_perspective_correction)
-        self.toolbar.addAction(correction_action)
-        
-        # 图像调整按钮 (修复：确保对话框能正常弹出)
-        adjust_action = QAction(QIcon(self.get_icon_path("adjust.png")), "画面调节", self)
-        adjust_action.triggered.connect(self.adjust_image)
-        self.toolbar.addAction(adjust_action)
-        
         # 画笔设置按钮
-        pen_settings_action = QAction(QIcon(self.get_icon_path("settings.png")), "画笔设置", self)
+        pen_settings_action = QAction(QIcon("icons/settings.png"), "画笔设置", self)
         pen_settings_action.triggered.connect(self.open_pen_settings)
         pen_settings_action.setShortcut(QKeySequence("Ctrl+P"))
         self.toolbar.addAction(pen_settings_action)
         
+        # 梯形校正按钮
+        perspective_action = QAction(QIcon("icons/correction.png"), "梯形校正", self)
+        perspective_action.triggered.connect(self.open_perspective_correction)
+        self.toolbar.addAction(perspective_action)
+        
+        # 画面调节按钮
+        adjustment_action = QAction(QIcon("icons/adjust.png"), "画面调节", self)
+        adjustment_action.triggered.connect(self.open_image_adjustment)
+        self.toolbar.addAction(adjustment_action)
+        
         # 照片面板按钮
-        photos_action = QAction(QIcon(self.get_icon_path("photos.png")), "照片", self)
+        photos_action = QAction(QIcon("icons/photos.png"), "照片", self)
         photos_action.triggered.connect(self.toggle_photo_dock)
         self.toolbar.addAction(photos_action)
         
-        # 扫描按钮
-        scan_action = QAction(QIcon(self.get_icon_path("scan.png")), "扫描", self)
-        scan_action.triggered.connect(self.start_scan)
-        self.toolbar.addAction(scan_action)
-        
         # 添加最小化按钮
-        minimize_action = QAction(QIcon(self.get_icon_path("minimize.png")), "最小化", self)
+        minimize_action = QAction(QIcon("icons/minimize.png"), "最小化", self)
         minimize_action.triggered.connect(self.showMinimized)
         minimize_action.setShortcut(QKeySequence("Ctrl+M"))
         self.toolbar.addAction(minimize_action)
         
         # 退出按钮
-        exit_action = QAction(QIcon(self.get_icon_path("exit.png")), "退出", self)
+        exit_action = QAction(QIcon("icons/exit.png"), "退出", self)
         exit_action.triggered.connect(self.close)
         exit_action.setShortcut(QKeySequence("Esc"))
         self.toolbar.addAction(exit_action)
@@ -1232,10 +834,9 @@ class VideoAnnotationApp(QMainWindow):
             QStatusBar {
                 background-color: #2c3e50;
                 color: white;
-                font-size: 13px;
-                font-weight: bold;
-                border-top: 2px solid #3498db;
-                padding: 4px;
+                font-size: 11px;
+                border-top: 1px solid #3498db;
+                padding: 3px;
             }
         """)
         self.setStatusBar(self.status_bar)
@@ -1248,10 +849,6 @@ class VideoAnnotationApp(QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_frame)
         
-        # 扫描定时器
-        self.scan_timer = QTimer(self)
-        self.scan_timer.timeout.connect(self.update_scan)
-        
         # 缩放指示器
         self.zoom_indicator = QLabel(self)
         self.zoom_indicator.setAlignment(Qt.AlignCenter)
@@ -1259,10 +856,9 @@ class VideoAnnotationApp(QMainWindow):
             QLabel {
                 background-color: rgba(40, 40, 40, 180);
                 color: white;
-                font-size: 16px;
-                font-weight: bold;
-                border-radius: 10px;
-                padding: 8px;
+                font-size: 14px;
+                border-radius: 8px;
+                padding: 6px;
             }
         """)
         self.zoom_indicator.hide()
@@ -1276,7 +872,7 @@ class VideoAnnotationApp(QMainWindow):
         self.photo_dock.setObjectName("PhotoDock")
         self.photo_dock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable)
         self.photo_dock.setAllowedAreas(Qt.RightDockWidgetArea)
-        self.photo_dock.setMinimumWidth(300)
+        self.photo_dock.setMinimumWidth(250)
         self.addDockWidget(Qt.RightDockWidgetArea, self.photo_dock)
         
         # 创建主部件
@@ -1285,8 +881,8 @@ class VideoAnnotationApp(QMainWindow):
         
         # 主布局
         layout = QVBoxLayout(dock_widget)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
         
         # 标题栏
         title_layout = QHBoxLayout()
@@ -1296,9 +892,8 @@ class VideoAnnotationApp(QMainWindow):
         title_label.setStyleSheet("""
             QLabel {
                 color: white;
-                font-size: 18px;
-                font-weight: bold;
-                padding: 5px;
+                font-size: 16px;
+                padding: 3px;
             }
         """)
         title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -1306,14 +901,13 @@ class VideoAnnotationApp(QMainWindow):
         
         # 关闭按钮
         close_btn = QPushButton("×")
-        close_btn.setFixedSize(28, 28)
+        close_btn.setFixedSize(24, 24)
         close_btn.setStyleSheet("""
             QPushButton {
                 background-color: #e74c3c;
                 color: white;
-                border-radius: 14px;
-                font-size: 18px;
-                font-weight: bold;
+                border-radius: 12px;
+                font-size: 16px;
             }
             QPushButton:hover {
                 background-color: #c0392b;
@@ -1331,45 +925,39 @@ class VideoAnnotationApp(QMainWindow):
             QScrollArea {
                 background-color: #1e1e1e;
                 border: 1px solid #444444;
-                border-radius: 8px;
+                border-radius: 6px;
             }
             QScrollBar:vertical {
                 background: #2c3e50;
-                width: 14px;
-                margin: 0px 0px 0px 0px;
-                border-radius: 7px;
+                width: 12px;
+                border-radius: 6px;
             }
             QScrollBar::handle:vertical {
                 background: #3498db;
-                min-height: 30px;
-                border-radius: 7px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
+                min-height: 25px;
+                border-radius: 6px;
             }
         """)
         
         # 捕获图像列表容器
         self.captured_list_widget = QListWidget()
         self.captured_list_widget.setViewMode(QListWidget.IconMode)
-        self.captured_list_widget.setIconSize(QSize(140, 105))
+        self.captured_list_widget.setIconSize(QSize(120, 90))
         self.captured_list_widget.setResizeMode(QListWidget.Adjust)
-        self.captured_list_widget.setSpacing(10)
+        self.captured_list_widget.setSpacing(8)
         self.captured_list_widget.setStyleSheet("""
             QListWidget {
                 background-color: #1e1e1e;
-                border: none;
-                padding: 10px;
+                padding: 8px;
             }
             QListWidget::item {
-                border: 2px solid #444444;
-                border-radius: 8px;
+                border: 1px solid #444444;
+                border-radius: 6px;
                 background-color: #2c3e50;
-                padding: 5px;
+                padding: 4px;
             }
             QListWidget::item:selected {
-                border: 3px solid #3498db;
-                background-color: #34495e;
+                border: 2px solid #3498db;
             }
         """)
         self.captured_list_widget.itemClicked.connect(self.select_captured_image)
@@ -1379,18 +967,17 @@ class VideoAnnotationApp(QMainWindow):
         
         # 控制按钮
         btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(10)
+        btn_layout.setSpacing(8)
         
         # 清空按钮
         clear_btn = QPushButton("清空")
-        clear_btn.setFixedHeight(40)
+        clear_btn.setFixedHeight(30)
         clear_btn.setStyleSheet("""
             QPushButton {
                 background-color: #e74c3c;
                 color: white;
-                border-radius: 8px;
-                font-weight: bold;
-                font-size: 14px;
+                border-radius: 6px;
+                font-size: 12px;
             }
             QPushButton:hover {
                 background-color: #c0392b;
@@ -1399,16 +986,15 @@ class VideoAnnotationApp(QMainWindow):
         clear_btn.clicked.connect(self.clear_captured_images)
         btn_layout.addWidget(clear_btn)
         
-        # 返回直播按钮 (修复：确保能正确返回实时画面)
+        # 返回直播按钮
         back_to_live_btn = QPushButton("返回直播")
-        back_to_live_btn.setFixedHeight(40)
+        back_to_live_btn.setFixedHeight(30)
         back_to_live_btn.setStyleSheet("""
             QPushButton {
                 background-color: #3498db;
                 color: white;
-                border-radius: 8px;
-                font-weight: bold;
-                font-size: 14px;
+                border-radius: 6px;
+                font-size: 12px;
             }
             QPushButton:hover {
                 background-color: #2980b9;
@@ -1430,63 +1016,89 @@ class VideoAnnotationApp(QMainWindow):
             self.update_photo_dock()
             self.photo_dock.show()
     
-    def get_icon_path(self, icon_name):
-        """获取图标路径"""
-        # 如果图标文件不存在，使用空路径
-        if not os.path.exists(f"icons/{icon_name}"):
-            return ""
-        return f"icons/{icon_name}"
+    def show_startup_image(self):
+        """显示启动图像"""
+        try:
+            # 尝试加载启动图像
+            startup_pixmap = QPixmap("boot.JPG")
+            if not startup_pixmap.isNull():
+                screen_size = QApplication.primaryScreen().size()
+                scaled_pixmap = startup_pixmap.scaled(
+                    screen_size,
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
+                )
+                self.video_label.setPixmap(scaled_pixmap)
+                self.video_label.setAlignment(Qt.AlignCenter)
+                self.startup_image = startup_pixmap
+                self.showing_startup = True
+                self.status_bar.showMessage("正在启动...")
+                return
+        except Exception as e:
+            print(f"加载启动图错误: {e}")
+        
+        # 如果加载失败，显示黑色背景
+        self.video_label.setPixmap(QPixmap())
+        self.video_label.setStyleSheet("background-color: black;")
+        self.startup_image = None
     
     def open_pen_settings(self):
-        """打开画笔设置对话框 - 允许在没有摄像头时打开"""
-        try:
-            dialog = ColorWidthDialog(self, self.pen_color, self.pen_width)
-            dialog.exec_()  # 直接打开，无需检查摄像头状态
-        except Exception as e:
-            print(f"打开画笔设置错误: {e}")
-            self.status_bar.showMessage(f"打开画笔设置出错: {str(e)}")
-    
-    def apply_perspective_correction(self):
-        """应用梯形校正"""
-        # 允许在没有摄像头时打开，但需要当前帧
-        if self.current_frame is None:
-            # 如果没有当前帧，创建黑色背景
-            pixmap = QPixmap(640, 480)
-            pixmap.fill(Qt.black)
-            painter = QPainter(pixmap)
-            painter.setPen(Qt.white)
-            painter.setFont(QFont("Arial", 16))
-            painter.drawText(pixmap.rect(), Qt.AlignCenter, "无可用图像\n请先连接摄像头")
-            painter.end()
-        else:
-            # 获取当前帧
-            frame = self.current_frame.copy()
-            
-            # 创建QImage
-            h, w, ch = frame.shape
-            bytes_per_line = ch * w
-            qimage = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
-            pixmap = QPixmap.fromImage(qimage)
-        
-        # 创建校正对话框
-        dialog = PerspectiveCorrectionDialog(self, self.camera_resolution)
-        
-        # 设置之前保存的校正点
-        if self.correction_points:
-            dialog.set_correction_points(self.correction_points)
-        
-        # 设置对话框图像
-        dialog.set_image(pixmap)
-        
-        # 显示对话框
+        """打开画笔设置对话框"""
+        dialog = ColorWidthDialog(self, self.pen_color, self.pen_width)
         if dialog.exec_() == QDialog.Accepted:
-            self.correction_points = dialog.get_correction_points()
-            self.correction_matrix = dialog.get_correction_matrix(self.camera_resolution)
-            self.status_bar.showMessage("梯形校正已应用")
+            self.pen_color, self.pen_width = dialog.get_settings()
+            self.status_bar.showMessage(f"画笔设置已更新 - 颜色: {self.pen_color.name()}, 粗细: {self.pen_width}px")
+    
+    def open_perspective_correction(self):
+        """打开梯形校正对话框（使用当前视频帧作为背景）"""
+        # 检查摄像头是否激活
+        if not self.camera_active or self.current_frame is None:
+            QMessageBox.warning(self, "警告", "请先连接摄像头并确保有视频帧")
+            return
+        
+        # 获取当前帧的分辨率
+        try:
+            resolution = (self.current_frame.shape[1], self.current_frame.shape[0])
+        except Exception as e:
+            QMessageBox.warning(self, "错误", f"获取分辨率失败: {e}")
+            return
+        
+        # 如果有保存的校正点，使用归一化坐标
+        saved_points = []
+        if self.perspective_points and len(self.perspective_points) == 4:
+            saved_points = [
+                QPointF(p.x() / resolution[0], p.y() / resolution[1]) for p in self.perspective_points
+            ]
+        
+        # 使用当前视频帧作为背景
+        if self.base_image:
+            # 创建并显示梯形校正对话框
+            dialog = PerspectiveCorrectionDialog(
+                self, 
+                saved_points, 
+                self.base_image.copy(),
+                resolution
+            )
+            if dialog.exec_() == QDialog.Accepted:
+                self.perspective_points = dialog.get_points()
+                self.status_bar.showMessage("梯形校正已应用")
+                self.save_config()
+    
+    def open_image_adjustment(self):
+        """打开画面调节对话框"""
+        dialog = ImageAdjustmentDialog(
+            self,
+            self.image_adjustments["brightness"],
+            self.image_adjustments["contrast"],
+            self.image_adjustments["orientation"],
+            self.image_adjustments["flip_horizontal"]
+        )
+        
+        if dialog.exec_() == QDialog.Accepted:
+            settings = dialog.get_settings()
+            self.image_adjustments = settings
+            self.status_bar.showMessage("画面调节设置已应用")
             self.save_config()
-        else:
-            self.correction_matrix = None
-            self.status_bar.showMessage("梯形校正已取消")
     
     def switch_camera(self, index):
         """切换到指定摄像头"""
@@ -1497,12 +1109,8 @@ class VideoAnnotationApp(QMainWindow):
         self.status_bar.showMessage(f"正在连接摄像头 {index}...")
         QApplication.processEvents()
         
-        # 获取分辨率设置
-        res = self.image_adjust_settings.get("resolution", (None, None))
-        width, height = res
-        
         # 使用线程初始化摄像头
-        self.camera_thread = CameraInitThread(index, width, height)
+        self.camera_thread = CameraInitThread(index)
         self.camera_thread.finished.connect(self.on_camera_connected)
         self.camera_thread.error.connect(self.on_camera_error)
         self.camera_thread.start()
@@ -1511,6 +1119,7 @@ class VideoAnnotationApp(QMainWindow):
         """摄像头连接成功"""
         self.cap = cap
         self.camera_active = True
+        self.current_camera_index = self.camera_thread.camera_index
         self.timer.start(int(1000 / self.target_fps))
         
         # 获取实际分辨率
@@ -1518,45 +1127,45 @@ class VideoAnnotationApp(QMainWindow):
         height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.camera_resolution = (width, height)
         
-        self.status_bar.showMessage(f"已连接摄像头 {self.current_camera_index} - {width}x{height} @ {self.target_fps}fps")
-        
-        # 如果存在校正点，计算校正矩阵
-        if self.correction_points:
-            dialog = PerspectiveCorrectionDialog(self, self.camera_resolution)
-            dialog.set_correction_points(self.correction_points)
-            self.correction_matrix = dialog.get_correction_matrix(self.camera_resolution)
-            self.status_bar.showMessage("梯形校正已加载")
+        # 获取摄像头名称
+        camera_name = self.get_camera_name(self.current_camera_index)
+        self.status_bar.showMessage(f"已连接: {camera_name} - {width}x{height} @ {self.target_fps}fps")
+        self.save_config()
     
     def on_camera_error(self, error_msg):
         """摄像头连接错误"""
         self.status_bar.showMessage(error_msg)
-        # 尝试下一个摄像头
-        self.try_next_camera()
     
-    def try_next_camera(self):
-        """尝试连接下一个可用摄像头"""
-        if not self.camera_list:
-            self.camera_list = self.detect_cameras()
-            
-        if not self.camera_list:
-            return
-            
-        # 获取当前索引在列表中的位置
-        if self.current_camera_index in self.camera_list:
-            current_index = self.camera_list.index(self.current_camera_index)
-            next_index = (current_index + 1) % len(self.camera_list)
-            next_camera = self.camera_list[next_index]
-            self.switch_camera(next_camera)
-        else:
-            self.switch_camera(self.camera_list[0])
-    
-    def start_camera(self):
-        """启动摄像头"""
-        if self.camera_active:
-            self.timer.start(int(1000 / self.target_fps))
-            self.status_bar.showMessage(f"摄像头已重新启动 - {self.camera_resolution[0]}x{self.camera_resolution[1]}")
-        else:
-            self.status_bar.showMessage("摄像头启动失败")
+    def get_camera_name(self, index):
+        """获取摄像头型号名称"""
+        if index in self.camera_names:
+            return self.camera_names[index]
+        
+        # 在Windows上尝试获取摄像头名称
+        camera_name = f"摄像头 {index}"
+        if platform.system() == "Windows":
+            try:
+                import winreg
+                key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, 
+                                    r"SYSTEM\CurrentControlSet\Control\Class\{6BDD1FC6-810F-11D0-BEC7-08002BE2092F}")
+                for i in range(winreg.QueryInfoKey(key)[0]):
+                    try:
+                        subkey_name = winreg.EnumKey(key, i)
+                        subkey = winreg.OpenKey(key, subkey_name)
+                        device_name, _ = winreg.QueryValueEx(subkey, "DeviceName")
+                        if device_name.startswith("@device:pnp"):
+                            # 提取友好名称
+                            friendly_name, _ = winreg.QueryValueEx(subkey, "FriendlyName")
+                            if f"#{index}" in subkey_name:
+                                camera_name = friendly_name
+                                self.camera_names[index] = camera_name
+                                break
+                    except:
+                        continue
+            except:
+                pass
+        
+        return camera_name
     
     def update_camera_menu(self):
         """更新摄像头菜单"""
@@ -1571,7 +1180,8 @@ class VideoAnnotationApp(QMainWindow):
             return
         
         for i in self.camera_list:
-            action = self.camera_menu.addAction(f"摄像头 {i}")
+            camera_name = self.get_camera_name(i)
+            action = self.camera_menu.addAction(f"{camera_name} (摄像头 {i})")
             action.triggered.connect(lambda checked, idx=i: self.switch_camera(idx))
     
     def detect_cameras(self, max_check=5):
@@ -1615,7 +1225,7 @@ class VideoAnnotationApp(QMainWindow):
                 continue
                 
             self.switch_camera(i)
-            time.sleep(0.5)
+            time.sleep(1)
             if self.camera_active:
                 self.current_camera_index = i
                 return
@@ -1633,21 +1243,69 @@ class VideoAnnotationApp(QMainWindow):
             self.camera_active = False
             self.current_camera_index = -1
     
+    def apply_image_adjustments(self, frame):
+        """应用画面调节设置"""
+        if frame is None:
+            return frame
+        
+        # 应用亮度和对比度
+        brightness = self.image_adjustments["brightness"] - 100  # -100 to 100
+        contrast = self.image_adjustments["contrast"] / 100.0  # 0.0 to 2.0
+        
+        # 应用公式: output = alpha * input + beta
+        alpha = contrast
+        beta = brightness
+        
+        adjusted = cv2.convertScaleAbs(frame, alpha=alpha, beta=beta)
+        
+        # 应用方向调整
+        orientation = self.image_adjustments["orientation"]
+        if orientation == 1:  # 90°
+            adjusted = cv2.rotate(adjusted, cv2.ROTATE_90_CLOCKWISE)
+        elif orientation == 2:  # 180°
+            adjusted = cv2.rotate(adjusted, cv2.ROTATE_180)
+        elif orientation == 3:  # 270°
+            adjusted = cv2.rotate(adjusted, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        
+        # 应用镜像翻转
+        if self.image_adjustments["flip_horizontal"]:
+            adjusted = cv2.flip(adjusted, 1)
+        
+        return adjusted
+    
     def update_frame(self):
         """更新视频帧"""
-        if self.cap and self.cap.isOpened() and not self.drawing:    
+        if self.cap and self.cap.isOpened():    
             ret, frame = self.cap.read()
             if not ret:
                 self.status_bar.showMessage("摄像头读取错误")
                 return
             
-            # 应用梯形校正
-            if self.correction_matrix is not None:
-                frame = cv2.warpPerspective(frame, self.correction_matrix, 
-                                           (self.camera_resolution[0], self.camera_resolution[1]))
-            
-            # 应用图像调整
+            # 应用画面调节
             frame = self.apply_image_adjustments(frame)
+            
+            # 应用梯形校正
+            if self.perspective_points and len(self.perspective_points) == 4:
+                try:
+                    h, w = frame.shape[:2]
+                    src_points = np.array([
+                        [0, 0], [w-1, 0], [w-1, h-1], [0, h-1]
+                    ], dtype=np.float32)
+                    
+                    dst_points = np.array([
+                        [self.perspective_points[0].x(), self.perspective_points[0].y()],
+                        [self.perspective_points[1].x(), self.perspective_points[1].y()],
+                        [self.perspective_points[2].x(), self.perspective_points[2].y()],
+                        [self.perspective_points[3].x(), self.perspective_points[3].y()]
+                    ], dtype=np.float32)
+                    
+                    matrix = cv2.getPerspectiveTransform(src_points, dst_points)
+                    frame = cv2.warpPerspective(frame, matrix, (w, h))
+                except Exception as e:
+                    print(f"梯形校正错误: {e}")
+            
+            # 存储原始背景帧
+            self.background_frame = frame.copy()
             
             # 转换颜色空间 BGR -> RGB
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -1656,32 +1314,35 @@ class VideoAnnotationApp(QMainWindow):
             
             # 创建QImage
             image = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
-            pixmap = QPixmap.fromImage(image)
+            self.base_image = QPixmap.fromImage(image)
             self.current_frame = frame
         else:
             # 如果没有摄像头，使用黑色背景
-            pixmap = QPixmap(self.video_label.size())
-            pixmap.fill(Qt.black)
+            self.base_image = QPixmap(self.video_label.size())
+            self.base_image.fill(Qt.black)
             self.current_frame = None
         
-        # 绘制已有的批注
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.Antialiasing, False)
+        # 更新显示
+        self.update_display()
+    
+    def update_display(self):
+        """更新显示（考虑批注、缩放和拖动）"""
+        if not self.base_image:
+            return
+            
+        # 创建基础图像副本
+        display_pixmap = self.base_image.copy()
         
-        # 绘制所有批注
-        for annotation in self.annotations:
-            self.draw_annotation(painter, annotation)
+        # 如果有批注图层，将其绘制到基础图像上
+        if self.annotation_layer and not self.annotation_layer.isNull():
+            painter = QPainter(display_pixmap)
+            painter.drawPixmap(0, 0, self.annotation_layer)
+            painter.end()
         
-        # 绘制临时批注
-        if self.temp_annotation:
-            self.draw_annotation(painter, self.temp_annotation)
-        
-        painter.end()
-        
-        # 显示图像（考虑缩放）
-        scaled_pixmap = pixmap.scaled(
-            int(self.video_label.width() * self.zoom_factor),
-            int(self.video_label.height() * self.zoom_factor),
+        # 应用缩放和偏移
+        scaled_pixmap = display_pixmap.scaled(
+            int(display_pixmap.width() * self.zoom_factor),
+            int(display_pixmap.height() * self.zoom_factor),
             Qt.KeepAspectRatio,
             Qt.SmoothTransformation
         )
@@ -1703,102 +1364,6 @@ class VideoAnnotationApp(QMainWindow):
         
         self.video_label.setPixmap(final_pixmap)
     
-    def draw_annotation(self, painter, annotation):
-        """绘制单个批注"""
-        tool = annotation["tool"]
-        points = annotation["points"]
-        color = annotation["color"]
-        width = annotation["width"]
-        
-        pen = QPen(color)
-        pen.setWidth(width)
-        painter.setPen(pen)
-        
-        if tool == "pen" and len(points) > 1:
-            path = QPainterPath()
-            path.moveTo(points[0])
-            for i in range(1, len(points)):
-                path.lineTo(points[i])
-            painter.drawPath(path)
-        # 修复：调小橡皮擦面积 (从3倍改为1.5倍)
-        elif tool == "eraser" and len(points) > 1:
-            pen = QPen(Qt.black)
-            pen.setWidth(int(width * 1.5))  # 减小橡皮擦面积
-            painter.setPen(pen)
-            path = QPainterPath()
-            path.moveTo(points[0])
-            for i in range(1, len(points)):
-                path.lineTo(points[i])
-            painter.drawPath(path)
-    
-    def apply_image_adjustments(self, frame):
-        """应用图像调整设置 - 增强亮度效果"""
-        if frame is None:
-            return frame
-        
-        # 调整亮度和对比度
-        brightness = self.image_adjust_settings["brightness"]
-        contrast = self.image_adjust_settings["contrast"]
-        
-        # 增强亮度调整效果
-        if brightness != 0 or contrast != 0:
-            # 将亮度和对比度值映射到更有效的范围
-            alpha = 1.0 + contrast / 100.0 * 2.0  # 对比度因子 (0.0 到 3.0)
-            beta = brightness * 2.55  # 亮度调整 (-255 到 255)
-            
-            # 应用调整
-            frame = cv2.convertScaleAbs(frame, alpha=alpha, beta=beta)
-        
-        # 旋转图像
-        rotation = self.image_adjust_settings["rotation"]
-        if rotation == 1:  # 90度
-            frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
-        elif rotation == 2:  # 180度
-            frame = cv2.rotate(frame, cv2.ROTATE_180)
-        elif rotation == 3:  # 270度
-            frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-        
-        # 镜像翻转
-        flip = self.image_adjust_settings["flip"]
-        if flip == 1:  # 水平翻转
-            frame = cv2.flip(frame, 1)
-        elif flip == 2:  # 垂直翻转
-            frame = cv2.flip(frame, 0)
-        
-        return frame
-    
-    def adjust_image(self):
-        """打开图像调整对话框 - 允许在没有摄像头时打开"""
-        try:
-            dialog = ImageAdjustDialog(self)
-            
-            # 设置当前值
-            dialog.brightness_slider.setValue(self.image_adjust_settings["brightness"])
-            dialog.contrast_slider.setValue(self.image_adjust_settings["contrast"])
-            dialog.rotate_combo.setCurrentIndex(self.image_adjust_settings["rotation"])
-            dialog.flip_combo.setCurrentIndex(self.image_adjust_settings["flip"])
-            
-            # 设置分辨率值
-            res = self.image_adjust_settings.get("resolution", (None, None))
-            dialog.set_resolution(res[0], res[1])
-            
-            if dialog.exec_() == QDialog.Accepted:
-                settings = dialog.get_settings()
-                self.image_adjust_settings = settings
-                self.status_bar.showMessage(f"图像调整已应用 - 亮度: {settings['brightness']}, 对比度: {settings['contrast']}")
-                self.save_config()
-                
-                # 如果分辨率有变化，重新连接摄像头
-                if settings["resolution"] != (None, None) and self.camera_active:
-                    self.status_bar.showMessage("分辨率设置将在下次连接摄像头时生效")
-                    self.stop_camera()
-                    self.switch_camera(self.current_camera_index)
-            else:
-                self.status_bar.showMessage("图像调整已取消")
-        except Exception as e:
-            print(f"画面调节错误: {e}")
-            self.status_bar.showMessage(f"画面调节出错: {str(e)}")
-    
     def capture_image(self):
         """捕获当前画面"""
         # 即使没有摄像头，也可以捕获当前显示的内容
@@ -1808,13 +1373,8 @@ class VideoAnnotationApp(QMainWindow):
             blank_image.fill(Qt.black)
             current_pixmap = QPixmap.fromImage(blank_image)
         
-        # 创建捕获图像对象 - 包括当前批注
+        # 创建捕获图像对象
         captured = CapturedImage(current_pixmap)
-        
-        # 添加当前批注到捕获的图像
-        for annotation in self.annotations:
-            captured.add_annotation(annotation.copy())
-        
         self.captured_images.append(captured)
         
         # 更新照片面板
@@ -1822,107 +1382,6 @@ class VideoAnnotationApp(QMainWindow):
             self.update_photo_dock()
         
         self.status_bar.showMessage(f"已捕获图像 - {captured.timestamp}")
-    
-    def start_scan(self):
-        """开始扫描过程"""
-        if self.scanning:
-            return
-            
-        if not self.camera_active:
-            self.status_bar.showMessage("请先连接摄像头")
-            return
-            
-        self.status_bar.showMessage("扫描中...")
-        self.scanning = True
-        self.scan_lines = []
-        self.scan_progress = 0
-        self.scan_timer.start(50)  # 每50毫秒更新一次
-    
-    def update_scan(self):
-        """更新扫描动画"""
-        if not self.scanning or not self.camera_active:
-            return
-            
-        # 获取当前帧
-        ret, frame = self.cap.read()
-        if not ret:
-            self.scan_timer.stop()
-            self.scanning = False
-            self.status_bar.showMessage("扫描失败: 无法读取摄像头")
-            return
-            
-        # 应用梯形校正
-        if self.correction_matrix is not None:
-            frame = cv2.warpPerspective(frame, self.correction_matrix, 
-                                       (self.camera_resolution[0], self.camera_resolution[1]))
-        
-        # 应用图像调整
-        frame = self.apply_image_adjustments(frame)
-        
-        # 转换颜色空间 BGR -> RGB
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        h, w, ch = frame.shape
-        
-        # 添加当前扫描线
-        line_height = max(1, h // 50)  # 每次扫描的高度
-        start_line = min(self.scan_progress, h)
-        end_line = min(self.scan_progress + line_height, h)
-        
-        # 保存当前扫描区域
-        scan_line = frame[start_line:end_line, :, :].copy()
-        self.scan_lines.append(scan_line)
-        
-        # 创建扫描效果图像
-        scan_image = np.zeros((h, w, 3), dtype=np.uint8)
-        current_line = 0
-        for line in self.scan_lines:
-            line_height = line.shape[0]
-            scan_image[current_line:current_line+line_height, :, :] = line
-            current_line += line_height
-        
-        # 绘制扫描线
-        cv2.line(scan_image, (0, end_line), (w, end_line), (0, 255, 0), 2)
-        
-        # 转换为QPixmap并显示
-        bytes_per_line = ch * w
-        qimage = QImage(scan_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        pixmap = QPixmap.fromImage(qimage)
-        self.video_label.setPixmap(pixmap.scaled(
-            self.video_label.size(), 
-            Qt.KeepAspectRatio, 
-            Qt.SmoothTransformation
-        ))
-        
-        # 更新进度
-        self.scan_progress += line_height
-        if self.scan_progress >= h:
-            # 扫描完成
-            self.scan_timer.stop()
-            self.scanning = False
-            
-            # 创建最终扫描图像
-            final_scan = np.zeros((h, w, 3), dtype=np.uint8)
-            current_line = 0
-            for line in self.scan_lines:
-                line_height = line.shape[0]
-                final_scan[current_line:current_line+line_height, :, :] = line
-                current_line += line_height
-            
-            # 保存扫描结果
-            qimage = QImage(final_scan.data, w, h, bytes_per_line, QImage.Format_RGB888)
-            scan_pixmap = QPixmap.fromImage(qimage)
-            
-            captured = CapturedImage(scan_pixmap)
-            self.captured_images.append(captured)
-            
-            # 更新照片面板
-            if self.photo_dock and self.photo_dock.isVisible():
-                self.update_photo_dock()
-            
-            self.status_bar.showMessage(f"扫描完成 - {captured.timestamp}")
-            
-            # 返回实时画面
-            self.back_to_live()
     
     def update_photo_dock(self):
         """更新照片面板内容"""
@@ -1939,14 +1398,14 @@ class VideoAnnotationApp(QMainWindow):
             self.captured_list_widget.addItem(item)
     
     def select_captured_image(self, item):
-        """选择捕获的图像 - 只查看不批注"""
+        """选择捕获的图像"""
         index = item.data(Qt.UserRole)
         if 0 <= index < len(self.captured_images):
+            self.current_captured_image = self.captured_images[index]
+            
             # 停止摄像头
             if self.camera_active:
                 self.stop_camera()
-            
-            self.current_captured_image = self.captured_images[index]
             
             # 显示捕获的图像
             pixmap = self.current_captured_image.get_annotated_pixmap()
@@ -1959,22 +1418,17 @@ class VideoAnnotationApp(QMainWindow):
             self.status_bar.showMessage(f"正在查看捕获的图像 - {self.current_captured_image.timestamp}")
     
     def back_to_live(self):
-        """返回直播画面 - 修复返回功能"""
+        """返回直播画面"""
         # 清除实时批注
         self.annotations = []
         self.zoom_factor = 1.0
         self.zoom_offset = QPointF(0, 0)
         self.current_captured_image = None
-        
-        # 恢复直播批注
-        self.annotations = self.live_annotations.copy()
+        self.annotation_layer = None
         
         # 重新连接摄像头
         if not self.camera_active and self.current_camera_index >= 0:
             self.switch_camera(self.current_camera_index)
-        elif self.camera_active:
-            # 如果摄像头已经在运行，只需更新画面
-            self.update_frame()
         
         self.status_bar.showMessage("已返回实时画面")
     
@@ -1995,7 +1449,7 @@ class VideoAnnotationApp(QMainWindow):
             self.status_bar.showMessage("已清空所有捕获的照片")
     
     def eventFilter(self, source, event):
-        """事件过滤器处理触控和鼠标事件 - 优化缩放UI"""
+        """事件过滤器处理触控和鼠标事件"""
         if source == self.video_label:
             # 处理触控事件
             if event.type() == QEvent.TouchBegin:
@@ -2026,10 +1480,6 @@ class VideoAnnotationApp(QMainWindow):
     
     def handle_touch_begin(self, event):
         """处理触控开始事件"""
-        # 在查看照片时忽略触控事件
-        if self.current_captured_image:
-            return
-            
         self.last_touch_points = {}
         touch_area = 0.0
         
@@ -2051,29 +1501,64 @@ class VideoAnnotationApp(QMainWindow):
                 self.current_tool = "eraser"
                 self.status_bar.showMessage("触控面积较大，已自动切换为橡皮擦模式")
         
-        # 单指触控 - 开始绘制
-        if len(self.last_touch_points) == 1 and self.current_tool != "move":
+        # 移动模式：单指拖动
+        if self.current_tool == "move" and len(self.last_touch_points) == 1:
+            self.dragging = True
+            self.drag_start_pos = list(self.last_touch_points.values())[0]
+            return True
+        
+        # 绘制模式：单指绘制
+        elif len(self.last_touch_points) == 1:
             self.touch_drawing = True
             pos = list(self.last_touch_points.values())[0]
             self.start_drawing(pos)
+            return True
     
     def handle_touch_update(self, event):
         """处理触控更新事件"""
-        # 在查看照片时忽略触控事件
-        if self.current_captured_image:
-            return
-            
         current_time = time.time()
-        if current_time - self.last_draw_time < 0.02:
-            return
-            
         touch_points = {}
         
         for touch_point in event.touchPoints():
             touch_points[touch_point.id()] = touch_point.pos()
         
-        # 双指手势识别
-        if len(touch_points) == 2:
+        # 移动模式：单指拖动
+        if self.current_tool == "move" and self.dragging and len(touch_points) == 1:
+            current_pos = list(touch_points.values())[0]
+            delta = current_pos - self.drag_start_pos
+            self.zoom_offset += delta
+            self.drag_start_pos = current_pos
+            self.update_display()
+            return True
+        
+        # 移动模式：双指缩放
+        elif self.current_tool == "move" and len(touch_points) == 2:
+            ids = list(touch_points.keys())
+            p1_prev = self.last_touch_points.get(ids[0])
+            p2_prev = self.last_touch_points.get(ids[1])
+            p1_curr = touch_points[ids[0]]
+            p2_curr = touch_points[ids[1]]
+            
+            if p1_prev and p2_prev:
+                # 计算缩放比例
+                prev_distance = (p1_prev - p2_prev).manhattanLength()
+                curr_distance = (p1_curr - p2_curr).manhattanLength()
+                scale_factor = curr_distance / prev_distance if prev_distance > 0 else 1.0
+                self.zoom_factor *= scale_factor
+                self.zoom_factor = max(0.5, min(self.zoom_factor, 3.0))
+                
+                # 计算平移
+                center_prev = (p1_prev + p2_prev) / 2
+                center_curr = (p1_curr + p2_curr) / 2
+                self.zoom_offset += center_curr - center_prev
+                
+                # 显示缩放指示器
+                self.show_zoom_indicator()
+                self.update_display()
+            return True
+        
+        # 绘制模式：双指手势识别
+        elif len(touch_points) == 2:
             self.touch_drawing = False
             ids = list(touch_points.keys())
             p1_prev = self.last_touch_points.get(ids[0])
@@ -2096,16 +1581,25 @@ class VideoAnnotationApp(QMainWindow):
                 
                 # 显示缩放指示器
                 self.show_zoom_indicator()
-        # 单指触控 - 继续绘制
-        elif self.touch_drawing and len(touch_points) == 1 and self.current_tool != "move":
+        # 绘制模式：单指触控 - 继续绘制
+        elif self.touch_drawing and len(touch_points) == 1:
+            if current_time - self.last_draw_time < 0.02:
+                return True
             pos = list(touch_points.values())[0]
             self.continue_drawing(pos)
             self.last_draw_time = current_time
         
         self.last_touch_points = touch_points
+        self.update_display()
+        return True
     
     def handle_touch_end(self, event):
         """处理触控结束事件"""
+        # 移动模式：结束拖动
+        if self.current_tool == "move":
+            self.dragging = False
+        
+        # 绘制模式：结束绘制
         self.touch_drawing = False
         self.last_touch_points = {}
         self.finalize_drawing()
@@ -2114,74 +1608,72 @@ class VideoAnnotationApp(QMainWindow):
         if hasattr(self, 'previous_tool') and self.current_tool == "eraser":
             self.current_tool = self.previous_tool
             self.status_bar.showMessage(f"已恢复为 {self.current_tool} 模式")
+        
+        return True
     
     def handle_mouse_press(self, event):
         """处理鼠标按下事件"""
-        # 在查看照片时忽略鼠标事件
-        if self.current_captured_image:
-            return
-            
-        # 移动模式下处理拖动
+        # 移动模式：开始拖动
         if self.current_tool == "move":
-            self.drag_start = event.pos()
-            self.drag_offset = self.zoom_offset
-            return
-            
+            self.dragging = True
+            self.drag_start_pos = event.pos()
+            return True
+        
+        # 绘制模式：开始绘制
         self.start_drawing(event.pos())
+        return True
     
     def handle_mouse_move(self, event):
         """处理鼠标移动事件"""
-        # 在查看照片时忽略鼠标事件
-        if self.current_captured_image:
-            return
-            
         current_time = time.time()
-        if current_time - self.last_draw_time < 0.02:
-            return
-            
-        # 移动模式下处理拖动
-        if self.current_tool == "move" and event.buttons() & Qt.LeftButton:
-            delta = event.pos() - self.drag_start
-            self.zoom_offset = self.drag_offset + QPointF(delta)
-            self.update_frame()
-            return
-            
+        
+        # 移动模式：拖动
+        if self.current_tool == "move" and self.dragging:
+            current_pos = event.pos()
+            delta = current_pos - self.drag_start_pos
+            self.zoom_offset += delta
+            self.drag_start_pos = current_pos
+            self.update_display()
+            return True
+        
+        # 绘制模式：继续绘制
         if self.drawing:
+            if current_time - self.last_draw_time < 0.02:
+                return True
             self.continue_drawing(event.pos())
             self.last_draw_time = current_time
+            return True
+        
+        return True
     
     def handle_mouse_release(self, event):
         """处理鼠标释放事件"""
+        # 移动模式：结束拖动
+        if self.current_tool == "move":
+            self.dragging = False
+        
+        # 绘制模式：结束绘制
         self.finalize_drawing()
+        return True
     
     def finalize_drawing(self):
         """完成绘制"""
         if self.temp_annotation:
-            # 添加到批注列表
-            self.annotations.append(self.temp_annotation)
-            # 保存到直播批注列表
-            self.live_annotations = self.annotations.copy()
-            # 强制更新实时画面
-            self.update_frame()
+            if self.current_captured_image:
+                self.current_captured_image.add_annotation(self.temp_annotation)
+            else:
+                self.annotations.append(self.temp_annotation)
             
             self.temp_annotation = None
-            # 确保立即更新显示
-            QApplication.processEvents()
+            self.update_display()
         
         self.drawing = False
         self.last_point = None
-        
-        # 恢复实时画面的定时器
-        if self.camera_active and not self.current_captured_image:
-            self.timer.start(int(1000 / self.target_fps))
-            self.background_pixmap = None
+        self.current_annotation = None
+        self.arrow_start_point = None
     
     def handle_wheel_event(self, event):
         """处理鼠标滚轮事件进行缩放"""
-        # 在查看照片时忽略滚轮事件
-        if self.current_captured_image:
-            return
-            
         delta = event.angleDelta().y()
         zoom_factor = 1.1 if delta > 0 else 0.9
         
@@ -2208,7 +1700,7 @@ class VideoAnnotationApp(QMainWindow):
             (new_img_pos.y() - old_img_pos.y()) * self.zoom_factor
         )
         
-        self.update_frame()
+        self.update_display()
         self.show_zoom_indicator()
     
     def show_zoom_indicator(self):
@@ -2218,8 +1710,8 @@ class VideoAnnotationApp(QMainWindow):
         self.zoom_indicator.adjustSize()
         
         # 位置在右上角
-        x = self.video_label.width() - self.zoom_indicator.width() - 20
-        y = 20
+        x = self.video_label.width() - self.zoom_indicator.width() - 10
+        y = 10
         
         self.zoom_indicator.move(x, y)
         self.zoom_indicator.show()
@@ -2237,21 +1729,17 @@ class VideoAnnotationApp(QMainWindow):
         if not img_pos:
             return
         
-        # 如果是实时画面且没有当前捕获的图像，则暂停定时器并保存背景
-        if self.camera_active and not self.current_captured_image:
-            self.timer.stop()  # 暂停定时器
-            # 保存当前画面作为背景（包含之前的所有批注）
-            current_pixmap = self.video_label.pixmap()
-            if current_pixmap and not current_pixmap.isNull():
-                self.background_pixmap = current_pixmap.copy()
+        # 初始化批注图层
+        if self.annotation_layer is None and self.base_image:
+            self.annotation_layer = QPixmap(self.base_image.size())
+            self.annotation_layer.fill(Qt.transparent)
         
         # 创建临时批注
         if self.current_tool == "eraser":
             self.temp_annotation = {
                 "tool": self.current_tool,
                 "points": [img_pos],
-                "color": QColor(0, 0, 0),
-                "width": int(self.pen_width * 1.5),  # 减小橡皮擦面积
+                "width": self.pen_width * 3  # 橡皮擦更宽
             }
         else:
             self.temp_annotation = {
@@ -2263,10 +1751,11 @@ class VideoAnnotationApp(QMainWindow):
         
         self.drawing = True
         self.last_point = img_pos
+        self.draw_temp_annotation()
     
     def continue_drawing(self, pos):
         """继续绘制批注"""
-        if not self.drawing or self.current_tool is None or not self.temp_annotation:
+        if not self.drawing or self.current_tool is None or not self.temp_annotation or self.current_tool == "move":
             return
         
         # 计算实际图像位置
@@ -2277,52 +1766,80 @@ class VideoAnnotationApp(QMainWindow):
         # 添加点到临时批注
         self.temp_annotation["points"].append(img_pos)
         
-        # 对于实时画面：在静态背景上绘制
-        if self.camera_active and not self.current_captured_image and self.background_pixmap:
-            pixmap = self.background_pixmap.copy()
-            painter = QPainter(pixmap)
-            painter.setRenderHint(QPainter.Antialiasing)
+        # 立即绘制临时批注
+        self.draw_temp_annotation()
+    
+    def draw_temp_annotation(self):
+        """绘制临时批注到图层"""
+        if not self.annotation_layer or not self.temp_annotation:
+            return
             
-            # 绘制所有批注
-            for annotation in self.annotations:
-                self.draw_annotation(painter, annotation)
-            
-            # 绘制临时批注
-            self.draw_annotation(painter, self.temp_annotation)
-            
-            painter.end()
-            self.video_label.setPixmap(pixmap)
+        # 创建临时图层
+        temp_layer = self.annotation_layer.copy()
+        painter = QPainter(temp_layer)
+        painter.setRenderHint(QPainter.Antialiasing)
         
-        # 确保立即更新显示
-        QApplication.processEvents()
+        tool = self.temp_annotation["tool"]
+        points = self.temp_annotation["points"]
+        width = self.temp_annotation["width"]
+        
+        if tool == "eraser":
+            if len(points) > 1:
+                # 橡皮擦绘制背景色
+                painter.setCompositionMode(QPainter.CompositionMode_Source)
+                painter.setPen(QPen(Qt.transparent, width * 3, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+                
+                # 绘制路径
+                path = QPainterPath()
+                path.moveTo(points[0])
+                for i in range(1, len(points)):
+                    path.lineTo(points[i])
+                painter.drawPath(path)
+        else:
+            # 正常绘制
+            painter.setPen(QPen(self.temp_annotation["color"], width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+            
+            if len(points) > 1:
+                # 绘制路径
+                path = QPainterPath()
+                path.moveTo(points[0])
+                for i in range(1, len(points)):
+                    path.lineTo(points[i])
+                painter.drawPath(path)
+        
+        painter.end()
+        
+        # 更新显示
+        self.annotation_layer = temp_layer
+        self.update_display()
     
     def map_to_image(self, pos):
-        """将屏幕坐标映射到图像坐标（修复不同步问题）"""
-        if not self.video_label.pixmap() or self.video_label.pixmap().isNull():
+        """将屏幕坐标映射到图像坐标"""
+        pixmap = self.video_label.pixmap()
+        if not pixmap or pixmap.isNull():
             return None
         
-        # 获取标签尺寸和图像尺寸
-        label_rect = self.video_label.rect()
-        pixmap = self.video_label.pixmap()
+        # 获取标签和图像尺寸
+        label_size = self.video_label.size()
         pixmap_size = pixmap.size()
         
-        # 计算缩放后的图像尺寸（保持比例）
-        scaled = pixmap_size.scaled(label_rect.size(), Qt.KeepAspectRatio)
+        # 计算缩放比例和偏移
+        scale_x = pixmap_size.width() / self.base_image.width() if self.base_image else 1.0
+        scale_y = pixmap_size.height() / self.base_image.height() if self.base_image else 1.0
+        scale = min(scale_x, scale_y) * self.zoom_factor
         
-        # 计算偏移（居中）
-        x_offset = (label_rect.width() - scaled.width()) / 2
-        y_offset = (label_rect.height() - scaled.height()) / 2
+        # 计算图像在label中的实际显示区域
+        scaled_width = self.base_image.width() * scale if self.base_image else 0
+        scaled_height = self.base_image.height() * scale if self.base_image else 0
+        x_offset = (label_size.width() - scaled_width) / 2 + self.zoom_offset.x()
+        y_offset = (label_size.height() - scaled_height) / 2 + self.zoom_offset.y()
         
-        # 计算缩放比例
-        scale_factor_x = scaled.width() / pixmap_size.width()
-        scale_factor_y = scaled.height() / pixmap_size.height()
-        
-        # 转换为图像坐标（考虑缩放和偏移）
-        img_x = (pos.x() - x_offset) / scale_factor_x
-        img_y = (pos.y() - y_offset) / scale_factor_y
+        # 转换为图像坐标
+        img_x = (pos.x() - x_offset) / scale
+        img_y = (pos.y() - y_offset) / scale
         
         # 检查是否在图像范围内
-        if 0 <= img_x < pixmap_size.width() and 0 <= img_y < pixmap_size.height():
+        if self.base_image and 0 <= img_x < self.base_image.width() and 0 <= img_y < self.base_image.height():
             return QPoint(int(img_x), int(img_y))
         return None
     
@@ -2338,13 +1855,13 @@ class VideoAnnotationApp(QMainWindow):
         
         # 更新鼠标光标
         if tool == "eraser":
-            pixmap = QPixmap(32, 32)
+            pixmap = QPixmap(28, 28)
             pixmap.fill(Qt.transparent)
             painter = QPainter(pixmap)
             painter.setRenderHint(QPainter.Antialiasing)
-            painter.setPen(QPen(Qt.black, 2))
+            painter.setPen(QPen(Qt.white, 2))
             painter.setBrush(Qt.white)
-            painter.drawEllipse(0, 0, 32, 32)
+            painter.drawEllipse(0, 0, 28, 28)
             painter.end()
             self.setCursor(QCursor(pixmap))
         elif tool == "move":
@@ -2354,57 +1871,109 @@ class VideoAnnotationApp(QMainWindow):
     
     def clear_annotations(self):
         """清除所有批注"""
-        if not self.annotations:
-            return
-            
-        self.annotations = []
-        self.live_annotations = []  # 同时清除直播批注
-        self.status_bar.showMessage("已清除实时画面的批注")
-        # 强制更新显示
-        self.update_frame()
-        
-        # 确保立即更新显示
-        QApplication.processEvents()
+        if self.current_captured_image:
+            self.current_captured_image.clear_annotations()
+            pixmap = self.current_captured_image.get_annotated_pixmap()
+            self.video_label.setPixmap(pixmap.scaled(
+                self.video_label.width(), 
+                self.video_label.height(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            ))
+            self.status_bar.showMessage("已清除当前图像的批注")
+        else:
+            self.annotations = []
+            self.annotation_layer = None
+            self.status_bar.showMessage("已清除实时画面的批注")
+            self.update_display()
     
     def undo_annotation(self):
         """撤回最后一步批注"""
-        if self.annotations:
+        if self.current_captured_image:
+            if self.current_captured_image.undo_annotation():
+                pixmap = self.current_captured_image.get_annotated_pixmap()
+                self.video_label.setPixmap(pixmap.scaled(
+                    self.video_label.width(), 
+                    self.video_label.height(),
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
+                ))
+                self.status_bar.showMessage("已撤回上一步操作")
+                return True
+        elif self.annotations:
             self.annotations.pop()
-            self.live_annotations = self.annotations.copy()  # 更新直播批注
+            # 重新绘制批注图层
+            self.redraw_annotation_layer()
             self.status_bar.showMessage("已撤回上一步操作")
-            # 强制更新显示
-            self.update_frame()
-            # 确保立即更新显示
-            QApplication.processEvents()
             return True
         
         self.status_bar.showMessage("没有可撤回的操作")
         return False
     
+    def redraw_annotation_layer(self):
+        """重新绘制批注图层"""
+        if not self.base_image:
+            return
+            
+        self.annotation_layer = QPixmap(self.base_image.size())
+        self.annotation_layer.fill(Qt.transparent)
+        
+        if not self.annotations:
+            return
+            
+        painter = QPainter(self.annotation_layer)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        for annotation in self.annotations:
+            tool = annotation["tool"]
+            points = annotation["points"]
+            width = annotation["width"]
+            
+            if tool == "eraser":
+                if len(points) > 1:
+                    # 橡皮擦绘制背景色
+                    painter.setCompositionMode(QPainter.CompositionMode_Source)
+                    painter.setPen(QPen(Qt.transparent, width * 3, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+                    
+                    # 绘制路径
+                    path = QPainterPath()
+                    path.moveTo(points[0])
+                    for i in range(1, len(points)):
+                        path.lineTo(points[i])
+                    painter.drawPath(path)
+            else:
+                # 正常绘制
+                painter.setPen(QPen(annotation["color"], width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+                
+                if len(points) > 1:
+                    # 绘制路径
+                    path = QPainterPath()
+                    path.moveTo(points[0])
+                    for i in range(1, len(points)):
+                        path.lineTo(points[i])
+                    painter.drawPath(path)
+        
+        painter.end()
+    
     def save_image(self):
         """保存当前图像（带批注）"""
         if self.current_captured_image:
             pixmap = self.current_captured_image.get_annotated_pixmap()
-        elif self.current_frame is not None:
-            frame = self.current_frame.copy()
-            h, w, ch = frame.shape
-            bytes_per_line = ch * w
+        elif self.base_image:
+            # 创建合成图像
+            result_pixmap = self.base_image.copy()
             
-            qimage = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
-            pixmap = QPixmap.fromImage(qimage)
-            
-            painter = QPainter(pixmap)
-            painter.setRenderHint(QPainter.Antialiasing, False)
-            
-            for annotation in self.annotations:
-                self.draw_annotation(painter, annotation)
-            
-            painter.end()
+            if self.annotation_layer and not self.annotation_layer.isNull():
+                painter = QPainter(result_pixmap)
+                painter.drawPixmap(0, 0, self.annotation_layer)
+                painter.end()
         else:
             pixmap = self.video_label.pixmap()
             if pixmap is None or pixmap.isNull():
                 self.status_bar.showMessage("没有可保存的图像")
                 return
+            else:
+                result_pixmap = pixmap.copy()
         
         # 生成默认文件名
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -2418,9 +1987,9 @@ class VideoAnnotationApp(QMainWindow):
         
         if file_path:
             if file_path.endswith(".jpg") or file_path.endswith(".jpeg"):
-                pixmap.save(file_path, "JPEG", 90)
+                result_pixmap.save(file_path, "JPEG", 90)
             else:
-                pixmap.save(file_path, "PNG")
+                result_pixmap.save(file_path, "PNG")
             
             self.saved_image_path = file_path
             self.status_bar.showMessage(f"图像已保存到: {file_path}")
@@ -2445,10 +2014,6 @@ class VideoAnnotationApp(QMainWindow):
             self.photo_dock.close()
         
         event.accept()
-    
-    def update_display(self):
-        """强制更新显示"""
-        self.update_frame()
 
 # 辅助类
 class CapturedImage:
@@ -2468,37 +2033,49 @@ class CapturedImage:
     
     def apply_annotations(self, pixmap):
         """应用批注到图像"""
-        painter = QPainter(pixmap)
+        # 创建透明图层
+        annotation_layer = QPixmap(pixmap.size())
+        annotation_layer.fill(Qt.transparent)
+        
+        painter = QPainter(annotation_layer)
         painter.setRenderHint(QPainter.Antialiasing)
         
         for annotation in self.annotations:
             tool = annotation["tool"]
             points = annotation["points"]
-            color = annotation["color"]
             width = annotation["width"]
             
-            pen = QPen(color)
-            pen.setWidth(width)
-            painter.setPen(pen)
-            
-            if tool == "pen" and len(points) > 1:
-                path = QPainterPath()
-                path.moveTo(points[0])
-                for i in range(1, len(points)):
-                    path.lineTo(points[i])
-                painter.drawPath(path)
-            # 修复：调小橡皮擦面积 (从3倍改为1.5倍)
-            elif tool == "eraser" and len(points) > 1:
-                pen = QPen(Qt.black)
-                pen.setWidth(int(width * 1.5))  # 减小橡皮擦面积
-                painter.setPen(pen)
-                path = QPainterPath()
-                path.moveTo(points[0])
-                for i in range(1, len(points)):
-                    path.lineTo(points[i])
-                painter.drawPath(path)
+            if tool == "eraser":
+                if len(points) > 1:
+                    # 橡皮擦绘制背景色
+                    painter.setCompositionMode(QPainter.CompositionMode_Source)
+                    painter.setPen(QPen(Qt.transparent, width * 3, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+                    
+                    # 绘制路径
+                    path = QPainterPath()
+                    path.moveTo(points[0])
+                    for i in range(1, len(points)):
+                        path.lineTo(points[i])
+                    painter.drawPath(path)
+            else:
+                # 正常绘制
+                painter.setPen(QPen(annotation["color"], width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+                
+                if len(points) > 1:
+                    # 绘制路径
+                    path = QPainterPath()
+                    path.moveTo(points[0])
+                    for i in range(1, len(points)):
+                        path.lineTo(points[i])
+                    painter.drawPath(path)
         
         painter.end()
+        
+        # 将批注图层绘制到原始图像上
+        result_painter = QPainter(pixmap)
+        result_painter.drawPixmap(0, 0, annotation_layer)
+        result_painter.end()
+        
         return pixmap
     
     def add_annotation(self, annotation):
@@ -2521,10 +2098,6 @@ class CapturedImage:
             self.thumbnail = self.get_annotated_pixmap().scaled(120, 90, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             return True
         return False
-    
-    def get_original_pixmap(self):
-        """获取原始图像（无批注）"""
-        return self.original_pixmap.copy()
 
 if __name__ == "__main__":
     # 设置环境变量以优化性能
@@ -2536,21 +2109,8 @@ if __name__ == "__main__":
     # 设置应用样式
     app.setStyle("Fusion")
     
-    # 显示启动图
-    splash = SplashScreen()
-    splash.show()
-    
-    # 强制显示启动图
-    QApplication.processEvents()
-    
-    # 等待3秒
-    time.sleep(3)
-    
     # 创建并显示主窗口
     window = VideoAnnotationApp()
     window.show()
-    
-    # 关闭启动图
-    splash.close()
     
     sys.exit(app.exec_())
