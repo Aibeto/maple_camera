@@ -1,6 +1,6 @@
 # 视频展台（我写的）
 ## 下载 download
-[releases] https://github.com/wwcrdrvf6u/sw_easicamera/releases/tag/easicamera
+[releases] https://github.com/wwcrdrvf6u/sw_easicamera/releases/
 
 ### 主要功能：
 - **实时摄像头展示**：支持多摄像头切换和自动连接
