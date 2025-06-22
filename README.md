@@ -1,4 +1,4 @@
-# 视频展台（我写的）
+# 汐沃视频展台（我写的）
 ## 下载 download
 [releases] https://github.com/wwcrdrvf6u/sw_easicamera/releases/
 
