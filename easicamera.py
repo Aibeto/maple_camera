@@ -801,16 +801,6 @@ class VideoAnnotationApp(QMainWindow):
         pen_settings_action.setShortcut(QKeySequence("Ctrl+P"))
         self.toolbar.addAction(pen_settings_action)
         
-        # 梯形校正按钮
-        perspective_action = QAction(QIcon("icons/correction.png"), "梯形校正", self)
-        perspective_action.triggered.connect(self.open_perspective_correction)
-        self.toolbar.addAction(perspective_action)
-        
-        # 画面调节按钮
-        adjustment_action = QAction(QIcon("icons/adjust.png"), "画面调节", self)
-        adjustment_action.triggered.connect(self.open_image_adjustment)
-        self.toolbar.addAction(adjustment_action)
-        
         # 照片面板按钮
         photos_action = QAction(QIcon("icons/photos.png"), "照片", self)
         photos_action.triggered.connect(self.toggle_photo_dock)
@@ -822,11 +812,79 @@ class VideoAnnotationApp(QMainWindow):
         minimize_action.setShortcut(QKeySequence("Ctrl+M"))
         self.toolbar.addAction(minimize_action)
         
+        # 创建折叠菜单栏
+        self.foldable_menu = QToolBar("更多选项")
+        self.foldable_menu.setIconSize(QSize(24, 24))
+        self.foldable_menu.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        self.foldable_menu.setStyleSheet("""
+            QToolBar {
+                background-color: #2c3e50;
+                border-top: 1px solid #3498db;
+                padding: 4px;
+                spacing: 6px;
+            }
+            QToolButton {
+                background-color: white;
+                color: #2c3e50;
+                border-radius: 4px;
+                padding: 4px;
+                font-size: 10px;
+                min-width: 40px;
+                min-height: 40px;
+            }
+            QToolButton:hover {
+                background-color: #e0e0e0;
+            }
+            QToolButton:pressed {
+                background-color: #d0d0d0;
+            }
+        """)
+        
+        # 创建折叠菜单按钮
+        self.fold_button = QPushButton()
+        self.fold_button.setIcon(QIcon("icons/more.png"))
+        self.fold_button.setText("更多")
+        self.fold_button.setFixedHeight(40)
+        self.fold_button.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border-radius: 4px;
+                padding: 4px;
+                font-size: 10px;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+        """)
+        self.fold_button.clicked.connect(self.toggle_foldable_menu)
+        self.toolbar.addWidget(self.fold_button)
+        
+        # 添加折叠菜单栏到主窗口
+        self.addToolBar(Qt.BottomToolBarArea, self.foldable_menu)
+        self.foldable_menu.hide()  # 初始隐藏
+        
+        # 添加菜单项到折叠菜单
+        # 导入按钮
+        import_action = QAction(QIcon("icons/import.png"), "导入照片", self)
+        import_action.triggered.connect(self.import_image)
+        self.foldable_menu.addAction(import_action)
+        
+        # 梯形校正按钮
+        perspective_action = QAction(QIcon("icons/correction.png"), "梯形校正", self)
+        perspective_action.triggered.connect(self.open_perspective_correction)
+        self.foldable_menu.addAction(perspective_action)
+        
+        # 画面调节按钮
+        adjustment_action = QAction(QIcon("icons/adjust.png"), "画面调节", self)
+        adjustment_action.triggered.connect(self.open_image_adjustment)
+        self.foldable_menu.addAction(adjustment_action)
+        
         # 退出按钮
         exit_action = QAction(QIcon("icons/exit.png"), "退出", self)
         exit_action.triggered.connect(self.close)
         exit_action.setShortcut(QKeySequence("Esc"))
-        self.toolbar.addAction(exit_action)
+        self.foldable_menu.addAction(exit_action)
         
         # 添加状态栏
         self.status_bar = QStatusBar()
@@ -865,6 +923,17 @@ class VideoAnnotationApp(QMainWindow):
         self.zoom_indicator_timer = QTimer(self)
         self.zoom_indicator_timer.setSingleShot(True)
         self.zoom_indicator_timer.timeout.connect(self.zoom_indicator.hide)
+    
+    def toggle_foldable_menu(self):
+        """切换折叠菜单的可见性"""
+        if self.foldable_menu.isVisible():
+            self.foldable_menu.hide()
+            self.fold_button.setIcon(QIcon("icons/more.png"))
+            self.fold_button.setText("更多")
+        else:
+            self.foldable_menu.show()
+            self.fold_button.setIcon(QIcon("icons/less.png"))
+            self.fold_button.setText("收起")
     
     def create_photo_dock(self):
         """创建照片停靠面板"""
@@ -1099,6 +1168,60 @@ class VideoAnnotationApp(QMainWindow):
             self.image_adjustments = settings
             self.status_bar.showMessage("画面调节设置已应用")
             self.save_config()
+    
+    def import_image(self):
+        """导入照片文件"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "选择图片文件", "",
+            "图片文件 (*.png *.jpg *.jpeg *.bmp *.tiff *.tif);;所有文件 (*.*)"
+        )
+        
+        if not file_path:
+            return
+            
+        # 加载图片
+        pixmap = QPixmap(file_path)
+        if pixmap.isNull():
+            QMessageBox.warning(self, "错误", "无法加载图片文件")
+            return
+        
+        # 创建捕获图像对象
+        captured = CapturedImage(pixmap)
+        captured.timestamp = f"导入: {os.path.basename(file_path)}"
+        self.captured_images.append(captured)
+        
+        # 停止摄像头
+        if self.camera_active:
+            self.stop_camera()
+        
+        # 显示导入的图片
+        self.select_captured_image_index(len(self.captured_images) - 1)
+        
+        # 更新照片面板
+        if self.photo_dock:
+            self.update_photo_dock()
+            self.photo_dock.show()
+        
+        self.status_bar.showMessage(f"已导入图片: {os.path.basename(file_path)}")
+    
+    def select_captured_image_index(self, index):
+        """选择指定索引的捕获图像"""
+        if 0 <= index < len(self.captured_images):
+            self.current_captured_image = self.captured_images[index]
+            
+            # 停止摄像头
+            if self.camera_active:
+                self.stop_camera()
+            
+            # 显示捕获的图像
+            pixmap = self.current_captured_image.get_annotated_pixmap()
+            self.video_label.setPixmap(pixmap.scaled(
+                self.video_label.width(), 
+                self.video_label.height(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            ))
+            self.status_bar.showMessage(f"正在查看: {self.current_captured_image.timestamp}")
     
     def switch_camera(self, index):
         """切换到指定摄像头"""
@@ -1400,22 +1523,7 @@ class VideoAnnotationApp(QMainWindow):
     def select_captured_image(self, item):
         """选择捕获的图像"""
         index = item.data(Qt.UserRole)
-        if 0 <= index < len(self.captured_images):
-            self.current_captured_image = self.captured_images[index]
-            
-            # 停止摄像头
-            if self.camera_active:
-                self.stop_camera()
-            
-            # 显示捕获的图像
-            pixmap = self.current_captured_image.get_annotated_pixmap()
-            self.video_label.setPixmap(pixmap.scaled(
-                self.video_label.width(), 
-                self.video_label.height(),
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation
-            ))
-            self.status_bar.showMessage(f"正在查看捕获的图像 - {self.current_captured_image.timestamp}")
+        self.select_captured_image_index(index)
     
     def back_to_live(self):
         """返回直播画面"""
@@ -1815,31 +1923,30 @@ class VideoAnnotationApp(QMainWindow):
     
     def map_to_image(self, pos):
         """将屏幕坐标映射到图像坐标"""
-        pixmap = self.video_label.pixmap()
-        if not pixmap or pixmap.isNull():
+        if not self.base_image or self.base_image.isNull():
             return None
-        
-        # 获取标签和图像尺寸
+            
+        # 获取标签尺寸
         label_size = self.video_label.size()
-        pixmap_size = pixmap.size()
         
-        # 计算缩放比例和偏移
-        scale_x = pixmap_size.width() / self.base_image.width() if self.base_image else 1.0
-        scale_y = pixmap_size.height() / self.base_image.height() if self.base_image else 1.0
-        scale = min(scale_x, scale_y) * self.zoom_factor
+        # 获取基础图像尺寸
+        base_width = self.base_image.width()
+        base_height = self.base_image.height()
+        
+        # 计算缩放后的图像尺寸
+        scaled_width = base_width * self.zoom_factor
+        scaled_height = base_height * self.zoom_factor
         
         # 计算图像在label中的实际显示区域
-        scaled_width = self.base_image.width() * scale if self.base_image else 0
-        scaled_height = self.base_image.height() * scale if self.base_image else 0
-        x_offset = (label_size.width() - scaled_width) / 2 + self.zoom_offset.x()
-        y_offset = (label_size.height() - scaled_height) / 2 + self.zoom_offset.y()
+        x_offset = (label_size.width() - scaled_width) // 2 + int(self.zoom_offset.x())
+        y_offset = (label_size.height() - scaled_height) // 2 + int(self.zoom_offset.y())
         
         # 转换为图像坐标
-        img_x = (pos.x() - x_offset) / scale
-        img_y = (pos.y() - y_offset) / scale
+        img_x = (pos.x() - x_offset) / self.zoom_factor
+        img_y = (pos.y() - y_offset) / self.zoom_factor
         
         # 检查是否在图像范围内
-        if self.base_image and 0 <= img_x < self.base_image.width() and 0 <= img_y < self.base_image.height():
+        if 0 <= img_x < base_width and 0 <= img_y < base_height:
             return QPoint(int(img_x), int(img_y))
         return None
     
