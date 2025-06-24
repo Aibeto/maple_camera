@@ -76,15 +76,18 @@ EasiCamera【版本号】/
 
 ## 运行要求
 - Python 3.6+
-- 依赖库：`opencv-python`, `numpy`, `PySide2`
+- 依赖库：`opencv-python`, `numpy`, `PySide2`, `Pillow`
 - 操作系统：Windows7、10、11/macOS/Linux
 
 ## 安装指南
 1. 安装Python 3.6或更高版本
 2. 安装依赖库：
-      pip install opencv-python numpy PySide2
-   
-3. 下载软件文件到本地目录
-4. 运行主程序：
+```
+pip install opencv-python numpy PySide2
+pip install Pillow==9.5.0
+```
+
+4. 下载软件文件到本地目录
+5. 运行主程序：
       python easicamera.py
    
