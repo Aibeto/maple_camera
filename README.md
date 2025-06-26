@@ -1,4 +1,4 @@
-# 汐沃视频展台（我写的）
+# 汐沃视频展台
 ## 下载 download
 [releases] https://github.com/wwcrdrvf6u/ShowWrite/releases/
 
