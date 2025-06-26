@@ -1,5 +1,5 @@
 # 汐沃视频展台
-## 下载 download
+## 下载
 [下载](https://github.com/wwcrdrvf6u/ShowWrite/releases/)
 
 ## 加入我们
@@ -47,7 +47,8 @@ EasiCamera【版本号】/
 - Python 3.6+
 - 依赖库：`opencv-python`, `numpy`, `PySide2`, `Pillow`
 - 操作系统：Windows7、10、11
-
+代码中使用了PySide2库，这是Qt的Python绑定，用于创建GUI应用程序。主类是VideoAnnotationApp，继承自QMainWindow，
+其他对话框如PerspectiveCorrectionDialog和ImageAdjustmentDialog分别用于梯形校正和图像调整设置。
 ## 安装指南
 1. 安装Python 3.6或更高版本
 2. 安装依赖库：
