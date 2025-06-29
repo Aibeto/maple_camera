@@ -1,4 +1,4 @@
-# 汐沃视频展台
+# 汐沃视频展台（希沃视频展台）
 ## 下载
 [下载](https://github.com/wwcrdrvf6u/ShowWrite/releases/)
 
@@ -62,3 +62,4 @@ pip install Pillow==9.5.0
 5. 运行主程序：
       python easicamera.py
    
+-（希沃视频展台）
