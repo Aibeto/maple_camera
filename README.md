@@ -1,9 +1,18 @@
-# 汐沃视频展台（希沃视频展台）
+<p align="center">
+  <img width="16%" align="center" src="logo-SW.png" alt="logo">
+</p>
+
+# ShowWrite 汐沃视频展台（希沃视频展台）
 ## 下载
 [下载](https://github.com/wwcrdrvf6u/ShowWrite/releases/)
 
 ## 加入我们
-![QQ交流群](讨论群.jpg)
+
+<p>
+  <img width="50%" align="center" src="讨论群.jpg" alt="tqq">
+</p>
+
+
 ## 文件目录结构
 
 ```
