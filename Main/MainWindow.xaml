@@ -1,0 +1,85 @@
+<Window x:Class="ShowWrite.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ShowWrite视频展台"
+        WindowState="Maximized"
+        Background="#2B2B2B"
+        WindowStyle="None"
+        MouseWheel="Window_MouseWheel">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 视频与墨迹 -->
+        <Grid Grid.Row="0"
+              ClipToBounds="True"
+              IsManipulationEnabled="True"
+              ManipulationStarting="VideoArea_ManipulationStarting"
+              ManipulationDelta="VideoArea_ManipulationDelta"
+              MouseDown="VideoArea_MouseDown"
+              MouseMove="VideoArea_MouseMove"
+              MouseUp="VideoArea_MouseUp">
+            <Grid.RenderTransform>
+                <TransformGroup>
+                    <ScaleTransform x:Name="ZoomTransform" ScaleX="1" ScaleY="1" />
+                    <TranslateTransform x:Name="PanTransform" X="0" Y="0" />
+                </TransformGroup>
+            </Grid.RenderTransform>
+            <Image x:Name="VideoImage" Stretch="Uniform" />
+            <InkCanvas x:Name="Ink" Background="Transparent" EditingMode="Ink" />
+        </Grid>
+
+        <!-- 底部主菜单 -->
+        <DockPanel Grid.Row="1" Background="#2C3E50" LastChildFill="True">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="10">
+                <ToggleButton x:Name="MoveBtn" Content="移动" Width="90" Height="40" Click="MoveBtn_Click" Margin="5" />
+                <Button Content="拍照" Width="90" Height="40" Click="Capture_Click" Margin="5" />
+                <Button Content="清除笔迹" Width="90" Height="40" Click="ClearInk_Click" Margin="5" />
+                <Button Content="撤销笔迹" Width="90" Height="40" Click="UndoInk_Click" Margin="5" />
+                <ToggleButton x:Name="PenBtn" Content="画笔" Width="90" Height="40" Click="PenBtn_Click" Margin="5" />
+                <ToggleButton x:Name="EraserBtn" Content="橡皮擦" Width="90" Height="40" Click="EraserBtn_Click" Margin="5" />
+                <Button Content="梯形校正" Width="90" Height="40" Click="OpenPerspectiveCorrection_Click" Margin="5" />
+                <!-- 照片按钮 + 提示Popup -->
+                <StackPanel>
+                    <Button x:Name="PhotoBtn" Content="照片" Width="90" Height="40" Click="TogglePhotoPanel_Click" Margin="5" />
+                    <Popup x:Name="PhotoTipPopup" PlacementTarget="{Binding ElementName=PhotoBtn}" Placement="Top" AllowsTransparency="True" StaysOpen="False">
+                        <Border Background="#333" CornerRadius="4" Padding="5">
+                            <TextBlock Text="已拍摄" Foreground="White" FontSize="14"/>
+                        </Border>
+                    </Popup>
+                </StackPanel>
+                <Button Content="最小化" Width="90" Height="40" Click="Minimize_Click" Margin="5" />
+                <Button Content="退出" Width="90" Height="40" Click="Exit_Click" Margin="5" />
+            </StackPanel>
+        </DockPanel>
+
+        <!-- 照片悬浮窗 -->
+        <Popup x:Name="PhotoPopup" PlacementTarget="{Binding ElementName=PhotoBtn}" Placement="Left" StaysOpen="False">
+            <Border Width="400" Height="500" Background="#2C3E50" CornerRadius="6" BorderBrush="White" BorderThickness="1">
+                <DockPanel>
+                    <TextBlock Text="拍摄记录" Foreground="White" FontSize="16" FontWeight="Bold" Margin="10" DockPanel.Dock="Top"/>
+                    <ListBox x:Name="PhotoList" SelectionChanged="PhotoList_SelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Margin="6">
+                                    <Image Width="70" Height="52" Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                                    <StackPanel Margin="10,0,0,0">
+                                        <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding Timestamp}" />
+                                        <TextBlock Foreground="#DDDDDD" FontSize="12" Text="{Binding Strokes.Count, StringFormat='笔迹数: {0}'}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <!-- 底部按钮 -->
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Center" Margin="10">
+                        <Button Content="返回实时" Width="90" Height="40" Click="BackToLive_Click" Margin="5" />
+                        <Button Content="保存图片" Width="90" Height="40" Click="SaveImage_Click" Margin="5" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+        </Popup>
+    </Grid>
+</Window>
