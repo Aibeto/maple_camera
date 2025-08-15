@@ -2,9 +2,44 @@
   <img width="16%" align="center" src="logo-SW.png" alt="logo">
 </p>
 
-# ShowWrite 汐沃视频展台（希沃视频展台）
+# ShowWrite视频展台 2.0.1
 ## 下载
-[下载](https://github.com/wwcrdrvf6u/ShowWrite/releases/)
+[Github Releases](https://github.com/wwcrdrvf6u/ShowWrite/releases/)
+# 关于Show Write
+## 版本号命名
+为兼容希沃视频展台的原生启动器（**sweclcuncher**），以便支持从侧边栏或中控菜单直接启动 **Show Write**，我们将应用的版本号格式调整为与希沃视频展台一致的风格。
+**示例：**
+```
+EasiCamera_2.1.1.8888
+```
+**结构说明：**
+
+| 部分   | 示例值          | 含义            |
+| ---- | ------------ | ------------- |
+| 前缀   | `EasiCamera` | 希沃视频展台的标识缩写   |
+| 分隔符  | `_`          | 固定分隔符         |
+| 主版本号 | `2.1.1`      | 应用自身的版本号      |
+| 尾缀   | `.8888`      | 区分希沃官方版本的附加标识 |
+
+保持与希沃原生版本号的兼容，又方便区分自研版本与官方版本。
+
+## 此软件的运行库
+### **.NET / WPF 基础库**
+* `System` — 基本类型、事件、IO 等
+* `System.IO` — 文件读写
+* `System.Threading.Tasks` — 异步任务
+* `System.Windows` — WPF 核心类（`Window`、`Application`、事件等）
+* `System.Windows.Controls` — WPF 控件（`Button`、`InkCanvas`、`Popup` 等）
+* `System.Windows.Ink` — WPF 墨迹绘制（笔迹数据、编辑模式）
+* `System.Windows.Input` — 输入事件（鼠标、触控、键盘）
+* `System.Windows.Media.Imaging` — 图像处理（`BitmapImage`、`BitmapSource` 等）
+* `System.Drawing`（别名 `D`）— GDI+ 图像处理（`Bitmap`、`Point` 等）
+### **WinForms 兼容库**
+* `System.Windows.Forms`（别名 `WinForms`）
+  * 用于颜色选择对话框（`ColorDialog`）
+  * 用于文件保存对话框（`SaveFileDialog`）
+### **第三方库**
+* `ImageMagick` — 图像处理库（Magick.NET，支持图像转换、编辑等）
 
 ## 加入我们
 
@@ -13,62 +48,5 @@
 </p>
 
 
-## 文件目录结构
-
-```
-EasiCamera【版本号】/
-├── easicamera.py             # 主程序文件
-├── boot.JPG                  # 启动背景图片
-├── config.json               # 配置文件（程序运行后生成）
-├── icons/                    # 图标目录
-│   ├── pen.png               # 画笔图标
-│   ├── switch_camera.png     # 切换摄像头图标
-│   ├── capture.png           # 拍照图标
-│   ├── save.png              # 保存图标
-│   ├── move.png              # 移动工具图标
-│   ├── eraser.png            # 橡皮擦图标
-│   ├── clear.png             # 清除图标
-│   ├── undo.png              # 撤回图标
-│   ├── settings.png          # 设置图标（画笔设置）
-│   ├── correction.png        # 梯形校正图标
-│   ├── adjust.png            # 画面调节图标
-│   ├── photos.png            # 照片库图标
-│   ├── minimize.png          # 最小化图标
-│   ├── exit.png              # 退出图标
-│   └── scan.png              # 应用图标（窗口图标）
-└── captures/                 # 照片保存目录（程序运行时自动创建）
-    ├── capture_20231025_143022.png
-    ├── capture_20231025_143145.jpg
-    └── ...
-```
-
-## 使用说明
-### 快捷键：
-- 空格键：拍照
-- P键：画笔工具
-- M键：移动工具
-- E键：橡皮擦工具
-- Ctrl+Z：撤回操作
-- Ctrl+S：保存当前画面
-- Esc：退出软件
-
-## 运行要求
-- Python 3.6+
-- 依赖库：`opencv-python`, `numpy`, `PySide2`, `Pillow`
-- 操作系统：Windows7、10、11
-
-- 代码中使用了PySide2库，这是Qt的Python绑定，用于创建GUI应用程序。主类是VideoAnnotationApp，继承自QMainWindow，
-其他对话框如PerspectiveCorrectionDialog和ImageAdjustmentDialog分别用于梯形校正和图像调整设置。
-## 安装指南
-1. 安装Python 3.6或更高版本
-2. 安装依赖库：
-```
-pip install opencv-python numpy PySide2
-pip install Pillow==9.5.0
-```
-
-4. 下载软件文件到本地目录
-5. 运行主程序：
-      python easicamera.py
    
 -（希沃视频展台）
