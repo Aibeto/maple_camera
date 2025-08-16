@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Ink;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using WinForms = System.Windows.Forms;
 using ShowWrite.Models;
@@ -29,6 +30,10 @@ namespace ShowWrite
 
         private D.Point _lastMousePos;
         private bool _isPanning = false;
+
+        // 新增：缩放比例 & 用户笔宽
+        private double currentZoom = 1.0;
+        private double userPenWidth = 2.0;
 
         public MainWindow()
         {
@@ -55,9 +60,17 @@ namespace ShowWrite
             {
                 MessageBox.Show("未找到可用摄像头。", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+
+            UpdatePenAttributes();
         }
 
-        #region ģʽ�л�
+        private void UpdatePenAttributes()
+        {
+            Ink.DefaultDrawingAttributes.Width = userPenWidth / currentZoom;
+            Ink.DefaultDrawingAttributes.Height = userPenWidth / currentZoom;
+        }
+
+        #region 模式切换
         private void SetMode(ToolMode mode, bool initial = false)
         {
             _currentMode = mode;
@@ -85,18 +98,19 @@ namespace ShowWrite
         private void MoveBtn_Click(object sender, RoutedEventArgs e)
         {
             if (_currentMode != ToolMode.Move) SetMode(ToolMode.Move);
-            else MoveBtn.IsChecked = true; // ��ֹȡ��ѡ��
+            else MoveBtn.IsChecked = true;
         }
 
         private void PenBtn_Click(object sender, RoutedEventArgs e)
         {
             if (_currentMode == ToolMode.Pen)
             {
-                var dlg = new WinForms.ColorDialog();
-                if (dlg.ShowDialog() == WinForms.DialogResult.OK)
+                var dlg = new PenSettingsWindow(Ink.DefaultDrawingAttributes.Color, userPenWidth);
+                if (dlg.ShowDialog() == true)
                 {
-                    Ink.DefaultDrawingAttributes.Color = System.Windows.Media.Color.FromArgb(
-                        dlg.Color.A, dlg.Color.R, dlg.Color.G, dlg.Color.B);
+                    Ink.DefaultDrawingAttributes.Color = dlg.SelectedColor;
+                    userPenWidth = dlg.SelectedWidth;
+                    UpdatePenAttributes();
                 }
                 PenBtn.IsChecked = true;
             }
@@ -105,6 +119,8 @@ namespace ShowWrite
                 SetMode(ToolMode.Pen);
             }
         }
+
+
 
         private void EraserBtn_Click(object sender, RoutedEventArgs e)
         {
@@ -151,8 +167,10 @@ namespace ShowWrite
             if (_currentMode == ToolMode.Move || _currentMode == ToolMode.Pen)
             {
                 double zoom = e.Delta > 0 ? 1.1 : 0.9;
-                ZoomTransform.ScaleX *= zoom;
-                ZoomTransform.ScaleY *= zoom;
+                currentZoom *= zoom;
+                ZoomTransform.ScaleX = currentZoom;
+                ZoomTransform.ScaleY = currentZoom;
+                UpdatePenAttributes();
             }
         }
 
@@ -175,11 +193,12 @@ namespace ShowWrite
                 return;
 
             var delta = e.DeltaManipulation;
-
-            ZoomTransform.ScaleX *= delta.Scale.X;
-            ZoomTransform.ScaleY *= delta.Scale.Y;
+            currentZoom *= delta.Scale.X;
+            ZoomTransform.ScaleX = currentZoom;
+            ZoomTransform.ScaleY = currentZoom;
             PanTransform.X += delta.Translation.X;
             PanTransform.Y += delta.Translation.Y;
+            UpdatePenAttributes();
 
             e.Handled = true;
         }
@@ -310,9 +329,6 @@ namespace ShowWrite
             }
         }
 
-        #endregion
-
-        #region ���߷���
         private BitmapImage BitmapToBitmapImage(D.Bitmap bitmap)
         {
             using var memory = new MemoryStream();
