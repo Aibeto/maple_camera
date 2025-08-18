@@ -59,6 +59,25 @@ namespace ShowWrite.Services
             }
         }
 
+        public List<string> GetAvailableCameras()//切换摄像头（获取摄像头列表）
+                                                 //c#之父保佑我！！
+        {
+            var devices = new List<string>();
+            for (int i = 0; ; i++)
+            {
+                try
+                {
+                    var cap = new VideoCaptureDevice(new FilterInfoCollection(FilterCategory.VideoInputDevice)[i].MonikerString);
+                    devices.Add(new FilterInfoCollection(FilterCategory.VideoInputDevice)[i].Name);
+                }
+                catch
+                {
+                    break;
+                }
+            }
+            return devices;
+        }
+
         public void Dispose()
         {
             Stop();

@@ -1,6 +1,6 @@
 <Window x:Class="ShowWrite.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="ShowWrite视频展台"
         WindowState="Maximized"
         Background="#2B2B2B"
@@ -28,18 +28,20 @@
                 </TransformGroup>
             </Grid.RenderTransform>
             <Image x:Name="VideoImage" Stretch="Uniform" />
-            <InkCanvas x:Name="Ink" Background="Transparent" EditingMode="Ink" />
+            <InkCanvas x:Name="Ink" Background="Transparent" />
         </Grid>
 
         <!-- 底部主菜单 -->
         <DockPanel Grid.Row="1" Background="#2C3E50" LastChildFill="True">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="10">
+                <Button Content="切换摄像头" Width="110" Height="40" Click="SwitchCamera_Click" Margin="5" />
                 <ToggleButton x:Name="MoveBtn" Content="移动" Width="90" Height="40" Click="MoveBtn_Click" Margin="5" />
                 <Button Content="拍照" Width="90" Height="40" Click="Capture_Click" Margin="5" />
                 <Button Content="清除笔迹" Width="90" Height="40" Click="ClearInk_Click" Margin="5" />
                 <Button Content="撤销笔迹" Width="90" Height="40" Click="UndoInk_Click" Margin="5" />
                 <ToggleButton x:Name="PenBtn" Content="画笔" Width="90" Height="40" Click="PenBtn_Click" Margin="5" />
                 <ToggleButton x:Name="EraserBtn" Content="橡皮擦" Width="90" Height="40" Click="EraserBtn_Click" Margin="5" />
+                <Button Content="画面调节" Width="90" Height="40" Click="OpenAdjustVideo_Click" Margin="5" />
                 <Button Content="梯形校正" Width="90" Height="40" Click="OpenPerspectiveCorrection_Click" Margin="5" />
                 <!-- 照片按钮 + 提示Popup -->
                 <StackPanel>
