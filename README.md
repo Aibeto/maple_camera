@@ -2,7 +2,7 @@
   <img width="16%" align="center" src="logo-SW.png" alt="logo">
 </p>
 
-# ShowWrite视频展台 2.0.1
+# ShowWrite视频展台 2.1
 ## 下载
 [Github Releases](https://github.com/wwcrdrvf6u/ShowWrite/releases/)
 # 关于Show Write
