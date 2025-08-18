@@ -34,26 +34,110 @@
         <!-- 底部主菜单 -->
         <DockPanel Grid.Row="1" Background="#2C3E50" LastChildFill="True">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="10">
-                <Button Content="切换摄像头" Width="110" Height="40" Click="SwitchCamera_Click" Margin="5" />
-                <ToggleButton x:Name="MoveBtn" Content="移动" Width="90" Height="40" Click="MoveBtn_Click" Margin="5" />
-                <Button Content="拍照" Width="90" Height="40" Click="Capture_Click" Margin="5" />
-                <Button Content="清除笔迹" Width="90" Height="40" Click="ClearInk_Click" Margin="5" />
-                <Button Content="撤销笔迹" Width="90" Height="40" Click="UndoInk_Click" Margin="5" />
-                <ToggleButton x:Name="PenBtn" Content="画笔" Width="90" Height="40" Click="PenBtn_Click" Margin="5" />
-                <ToggleButton x:Name="EraserBtn" Content="橡皮擦" Width="90" Height="40" Click="EraserBtn_Click" Margin="5" />
-                <Button Content="画面调节" Width="90" Height="40" Click="OpenAdjustVideo_Click" Margin="5" />
-                <Button Content="梯形校正" Width="90" Height="40" Click="OpenPerspectiveCorrection_Click" Margin="5" />
-                <!-- 照片按钮 + 提示Popup -->
+
+                <!-- 移动 / 画笔 / 橡皮擦 -->
+                <ToggleButton x:Name="MoveBtn" Click="MoveBtn_Click" Margin="5" Width="90" Height="40">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Image Source="icons/move.png" Width="20" Height="20" Margin="0,0,5,0"/>
+                        <TextBlock Text="移动" Foreground="White"/>
+                    </StackPanel>
+                </ToggleButton>
+
+                <ToggleButton x:Name="PenBtn" Click="PenBtn_Click" Margin="5" Width="90" Height="40">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Image Source="icons/pen.png" Width="20" Height="20" Margin="0,0,5,0"/>
+                        <TextBlock Text="画笔" Foreground="White"/>
+                    </StackPanel>
+                </ToggleButton>
+
+                <ToggleButton x:Name="EraserBtn" Click="EraserBtn_Click" Margin="5" Width="90" Height="40">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Image Source="icons/eraser.png" Width="20" Height="20" Margin="0,0,5,0"/>
+                        <TextBlock Text="橡皮擦" Foreground="White"/>
+                    </StackPanel>
+                </ToggleButton>
+
+                <!-- 撤回 / 清屏 -->
+                <Button Click="UndoInk_Click" Margin="5" Width="90" Height="40">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Image Source="icons/undo.png" Width="20" Height="20" Margin="0,0,5,0"/>
+                        <TextBlock Text="撤销" Foreground="White"/>
+                    </StackPanel>
+                </Button>
+
+                <Button Click="ClearInk_Click" Margin="5" Width="90" Height="40">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Image Source="icons/clear.png" Width="20" Height="20" Margin="0,0,5,0"/>
+                        <TextBlock Text="清屏" Foreground="White"/>
+                    </StackPanel>
+                </Button>
+
+                <!-- 拍照 / 照片 -->
+                <Button Click="Capture_Click" Margin="5" Width="90" Height="40">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Image Source="icons/capture.png" Width="20" Height="20" Margin="0,0,5,0"/>
+                        <TextBlock Text="拍照" Foreground="White"/>
+                    </StackPanel>
+                </Button>
+
                 <StackPanel>
-                    <Button x:Name="PhotoBtn" Content="照片" Width="90" Height="40" Click="TogglePhotoPanel_Click" Margin="5" />
+                    <Button x:Name="PhotoBtn" Click="TogglePhotoPanel_Click" Margin="5" Width="90" Height="40">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Image Source="icons/save.png" Width="20" Height="20" Margin="0,0,5,0"/>
+                            <TextBlock Text="照片" Foreground="White"/>
+                        </StackPanel>
+                    </Button>
                     <Popup x:Name="PhotoTipPopup" PlacementTarget="{Binding ElementName=PhotoBtn}" Placement="Top" AllowsTransparency="True" StaysOpen="False">
                         <Border Background="#333" CornerRadius="4" Padding="5">
                             <TextBlock Text="已拍摄" Foreground="White" FontSize="14"/>
                         </Border>
                     </Popup>
                 </StackPanel>
-                <Button Content="最小化" Width="90" Height="40" Click="Minimize_Click" Margin="5" />
-                <Button Content="退出" Width="90" Height="40" Click="Exit_Click" Margin="5" />
+
+                <!-- 更多按钮（弹出菜单） -->
+                <Menu>
+                    <MenuItem Width="90" Height="49">
+                        <MenuItem.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <Image Source="icons/settings.png" Width="20" Height="20" Margin="0,0,5,0"/>
+                                <TextBlock Text="更多" Foreground="White"/>
+                            </StackPanel>
+                        </MenuItem.Header>
+
+                        <MenuItem Header="切换摄像头" Click="SwitchCamera_Click">
+                            <MenuItem.Icon>
+                                <Image Source="icons/switch_camera.png" Width="16" Height="16"/>
+                            </MenuItem.Icon>
+                        </MenuItem>
+
+                        <MenuItem Header="画面调节" Click="OpenAdjustVideo_Click">
+                            <MenuItem.Icon>
+                                <Image Source="icons/startup_image.png" Width="16" Height="16"/>
+                            </MenuItem.Icon>
+                        </MenuItem>
+
+                        <MenuItem Header="梯形校正" Click="OpenPerspectiveCorrection_Click">
+                            <MenuItem.Icon>
+                                <Image Source="icons/correction.png" Width="16" Height="16"/>
+                            </MenuItem.Icon>
+                        </MenuItem>
+
+                        <MenuItem Header="退出" Click="Exit_Click">
+                            <MenuItem.Icon>
+                                <Image Source="icons/exit.png" Width="16" Height="16"/>
+                            </MenuItem.Icon>
+                        </MenuItem>
+                    </MenuItem>
+                </Menu>
+
+                <!-- 最小化 -->
+                <Button Click="Minimize_Click" Margin="5" Width="90" Height="40">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Image Source="icons/minimize.png" Width="20" Height="20" Margin="0,0,5,0"/>
+                        <TextBlock Text="最小化" Foreground="White"/>
+                    </StackPanel>
+                </Button>
+
             </StackPanel>
         </DockPanel>
 
@@ -77,8 +161,18 @@
                     </ListBox>
                     <!-- 底部按钮 -->
                     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Center" Margin="10">
-                        <Button Content="返回实时" Width="90" Height="40" Click="BackToLive_Click" Margin="5" />
-                        <Button Content="保存图片" Width="90" Height="40" Click="SaveImage_Click" Margin="5" />
+                        <Button Click="BackToLive_Click" Margin="5" Width="90" Height="40">
+                            <StackPanel Orientation="Horizontal">
+                                <Image Source="icons/startup_image.png" Width="20" Height="20" Margin="0,0,5,0"/>
+                                <TextBlock Text="返回实时" Foreground="White"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Click="SaveImage_Click" Margin="5" Width="90" Height="40">
+                            <StackPanel Orientation="Horizontal">
+                                <Image Source="icons/save.png" Width="20" Height="20" Margin="0,0,5,0"/>
+                                <TextBlock Text="保存图片" Foreground="White"/>
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
                 </DockPanel>
             </Border>
