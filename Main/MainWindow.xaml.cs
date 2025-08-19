@@ -1,4 +1,65 @@
-﻿using AForge; // IntPoint
+﻿/*
+ * =====================================================================================
+ *  _______   _______   _______    _______    _______    _______    _______    _______
+ * |       | |       | |       |  |       |  |       |  |       |  |       |  |       |
+ * |   _   | |   _   | |   _   |  |   _   |  |   _   |  |   _   |  |   _   |  |   _   |
+ * |  | |  | |  | |  | |  | |  |  |  | |  |  |  | |  |  |  | |  |  |  | |  |  |  | |  |
+ * |  |_|  | |  |_|  | |  |_|  |  |  |_|  |  |  |_|  |  |  |_|  |  |  |_|  |  |  |_|  |
+ * |       | |       | |       |  |       |  |       |  |       |  |       |  |       |
+ * |_______| |_______| |_______|  |_______|  |_______|  |_______|  |_______|  |_______|
+ *
+ *        C# 之父：Anders Hejlsberg 保佑符文阵
+ *        (丹麦剑客の代码圣剑已出鞘)
+ *
+ *          .'''.        __...__       .'''.
+ *        '   .-'``-..''         ``-..-'   `
+ *       /  .'.                      .'.  \
+ *      /  /   \    \  \        /  /    \  \
+ *     |  |     \    '. `.    .' .'     |  |
+ *     |  |      \     '. `' .'  .'      |  |
+ *     |  |       \      '.'  .'         |  |
+ *     |  |        \       .'.'          |  |
+ *     |  |         \     /   \          |  |
+ *      \  \         \   /     \        /  /
+ *       \  '-.       '-'       '.    .-  /
+ *        '.   ``''-.           .''-''   .'
+ *          '-..__   `````'''''   __..-'
+ *                 ````-...-''''
+ *
+ *  符文真言：#️⃣🔥  C#之父赐我类型安全  🔥#️⃣
+ *            愿编译器如明镜，运行时无惊惶
+ *            所有指针皆安全，所有异常早预防
+ *            内存永不泄漏，线程永不争抢
+ *            十年代码如新铸，永无BUG镇八方！
+ *            
+ *            LINQ查询如流水，数据操作似神仙
+ *            异步等待无挂碍，多线程中定如山
+ *            模式匹配断真假，空值安全避深渊
+ *            属性封装护数据，对象设计有章循
+ *            
+ *            垃圾回收自动清，资源管理自闭环
+ *            接口抽象定规范，继承多态展神通
+ *            单元测试全覆盖，发布上线心不慌
+ *            框架更新随主升，技术永不过时新
+ *            
+ *            代码整洁如诗画，注释清晰胜经文
+ *            需求变更随风去，架构稳定万年青
+ *            调试轻松无烦恼，日志清晰查问题
+ *            绩效评估A+满，升职加薪步步高
+ *            
+ *            愿智能感知常相伴，代码补全如神助
+ *            愿NuGet包永稳定，依赖冲突不复存
+ *            愿Git提交无冲突，版本历史如明镜
+ *            愿需求文档写得清，产品经理是神仙
+ *            
+ *            C#之父显圣光，扫尽人间所有BUG
+ *            代码如剑斩混沌，架构如塔镇乾坤
+ *            从此无有崩溃事，唯有成功报佳音
+ *            今以符文镇此卷，万年代码永安宁！
+ *
+ * =====================================================================================
+ */
+using AForge;
 using AForge.Imaging.Filters;
 using Newtonsoft.Json;
 using ShowWrite.Models;
@@ -29,13 +90,24 @@ using WinForms = System.Windows.Forms;
 
 namespace ShowWrite
 {
-    // 配置模型：保存摄像头索引与透视校正
+    // 更新后的配置模型
     public class AppConfig
     {
         public int CameraIndex { get; set; } = 0;
         public List<IntPoint>? CorrectionPoints { get; set; }  // AForge.IntPoint（长度=4）
         public int SourceWidth { get; set; }
         public int SourceHeight { get; set; }
+
+        // 新增设置项
+        public bool StartMaximized { get; set; } = true;
+        public bool AutoStartCamera { get; set; } = true;
+        public double DefaultPenWidth { get; set; } = 2.0;
+        public string DefaultPenColor { get; set; } = "#FF0000FF"; // 蓝色
+        public bool EnableHardwareAcceleration { get; set; } = true;
+
+        // 添加缺少的属性
+        public bool EnableFrameProcessing { get; set; } = true; // 新增
+        public int FrameRateLimit { get; set; } = 2; // 默认选择25 FPS
     }
 
     public partial class MainWindow : Window
@@ -48,6 +120,9 @@ namespace ShowWrite
 
         // 透视校正过滤器
         private QuadrilateralTransformation? _perspectiveCorrectionFilter;
+
+        // 配置对象
+        private AppConfig config = new AppConfig();
 
         private enum ToolMode { None, Move, Pen, Eraser }
         private ToolMode _currentMode = ToolMode.None;
@@ -88,8 +163,17 @@ namespace ShowWrite
             InitializeComponent();
             PhotoList.ItemsSource = _photos;
 
+            // 加载配置（包含新增的设置项）
+            LoadConfig();
+
+            // 应用窗口设置
             WindowStyle = WindowStyle.None;
-            WindowState = WindowState.Maximized;
+            WindowState = config.StartMaximized ? WindowState.Maximized : WindowState.Normal;
+
+            // 应用画笔设置
+            var penColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(config.DefaultPenColor);
+            Ink.DefaultDrawingAttributes.Color = penColor;
+            userPenWidth = config.DefaultPenWidth;
 
             // —— 捕捉画笔/橡皮事件 —— //
             Ink.StrokeCollected += Ink_StrokeCollected; // 画笔：落笔->抬笔后收集（一次性）
@@ -118,10 +202,8 @@ namespace ShowWrite
                 });
             };
 
-            // 先加载配置（摄像头索引 + 透视校正）
-            LoadConfig();
-
-            if (!_videoService.Start(currentCameraIndex))
+            // 如果配置为自动启动摄像头，则尝试启动
+            if (config.AutoStartCamera && !_videoService.Start(currentCameraIndex))
             {
                 MessageBox.Show("未找到可用摄像头。", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -525,16 +607,16 @@ namespace ShowWrite
                 // 更“努力”的识别 + 常见格式
                 var reader = new MultiFormatReader();
                 var hints = new Dictionary<DecodeHintType, object>
-        {
-            { DecodeHintType.TRY_HARDER, true },
-            { DecodeHintType.POSSIBLE_FORMATS, new[]
                 {
-                    BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.AZTEC,
-                    BarcodeFormat.PDF_417, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
-                    BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A
-                }
-            }
-        };
+                    { DecodeHintType.TRY_HARDER, true },
+                    { DecodeHintType.POSSIBLE_FORMATS, new[]
+                        {
+                            BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.AZTEC,
+                            BarcodeFormat.PDF_417, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
+                            BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A
+                        }
+                    }
+                };
 
                 return reader.decode(binary, hints);
             }
@@ -583,7 +665,7 @@ namespace ShowWrite
             }
         }
 
-        private void ScanDocument_Click(object sender, RoutedEventArgs e)// 扫描文档
+        private void ScanDocument_Click(object sender, RoutedEventArgs e)
         {
             var bmp = _videoService.GetFrameCopy();
             if (bmp == null) return;
@@ -619,6 +701,7 @@ namespace ShowWrite
                 processed?.Dispose();
             }
         }
+
 
         // =========================
         // 画面调节窗口（不写入 config）
@@ -685,19 +768,29 @@ namespace ShowWrite
         }
 
         // =========================
-        // 配置保存/加载（摄像头索引 + 透视校正）
+        // 配置保存/加载（摄像头索引 + 透视校正 + 新增设置）
         // =========================
         private void LoadConfig()
         {
             try
             {
-                if (!File.Exists(configPath)) return;
+                if (!File.Exists(configPath))
+                {
+                    // 使用默认配置
+                    config = new AppConfig();
+                    return;
+                }
 
                 var json = File.ReadAllText(configPath, Encoding.UTF8);
                 var cfg = JsonConvert.DeserializeObject<AppConfig>(json);
-                if (cfg == null) return;
+                if (cfg == null)
+                {
+                    config = new AppConfig();
+                    return;
+                }
 
                 currentCameraIndex = cfg.CameraIndex;
+                config = cfg;
 
                 if (cfg.CorrectionPoints != null && cfg.CorrectionPoints.Count == 4)
                 {
@@ -708,6 +801,7 @@ namespace ShowWrite
             catch (Exception ex)
             {
                 Console.WriteLine("加载配置失败: " + ex.Message);
+                config = new AppConfig(); // 使用默认配置
             }
         }
 
@@ -717,16 +811,20 @@ namespace ShowWrite
             {
                 var cfg = new AppConfig
                 {
-                    CameraIndex = currentCameraIndex
-                };
+                    CameraIndex = currentCameraIndex,
+                    CorrectionPoints = _perspectiveCorrectionFilter != null ?
+                        new List<IntPoint>(_perspectiveCorrectionFilter.SourceQuadrilateral) : null,
+                    SourceWidth = _perspectiveCorrectionFilter?.NewWidth ?? 0,
+                    SourceHeight = _perspectiveCorrectionFilter?.NewHeight ?? 0,
 
-                if (_perspectiveCorrectionFilter != null)
-                {
-                    // 保存校正点与目标尺寸
-                    cfg.CorrectionPoints = new List<IntPoint>(_perspectiveCorrectionFilter.SourceQuadrilateral);
-                    cfg.SourceWidth = _perspectiveCorrectionFilter.NewWidth;
-                    cfg.SourceHeight = _perspectiveCorrectionFilter.NewHeight;
-                }
+                    // 新增设置项
+                    StartMaximized = config.StartMaximized,
+                    AutoStartCamera = config.AutoStartCamera,
+                    DefaultPenWidth = userPenWidth,
+                    DefaultPenColor = Ink.DefaultDrawingAttributes.Color.ToString(),
+                    EnableHardwareAcceleration = config.EnableHardwareAcceleration,
+                    FrameRateLimit = config.FrameRateLimit
+                };
 
                 var json = JsonConvert.SerializeObject(cfg, Formatting.Indented);
                 File.WriteAllText(configPath, json, Encoding.UTF8);
@@ -734,6 +832,49 @@ namespace ShowWrite
             catch (Exception ex)
             {
                 Console.WriteLine("保存配置失败: " + ex.Message);
+            }
+        }
+
+        // =========================
+        // 设置窗口功能
+        // =========================
+        // 在MainWindow类中添加
+        private void OpenSettings_Click(object sender, RoutedEventArgs e)
+        {
+            // 获取可用摄像头列表
+            var cameras = _videoService.GetAvailableCameras();
+
+            // 创建设置窗口并传入当前配置
+            var settingsWindow = new SettingsWindow(config, cameras)
+            {
+                Owner = this,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner
+            };
+
+            if (settingsWindow.ShowDialog() == true)
+            {
+                // 应用设置
+                WindowState = config.StartMaximized ? WindowState.Maximized : WindowState.Normal;
+
+                // 更新画笔设置
+                var penColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(config.DefaultPenColor);
+                Ink.DefaultDrawingAttributes.Color = penColor;
+                userPenWidth = config.DefaultPenWidth;
+                UpdatePenAttributes();
+
+                // 保存配置
+                SaveConfig();
+
+                // 如果摄像头变更，重新启动摄像头
+                if (currentCameraIndex != config.CameraIndex)
+                {
+                    currentCameraIndex = config.CameraIndex;
+                    _videoService.Stop();
+                    if (config.AutoStartCamera && !_videoService.Start(currentCameraIndex))
+                    {
+                        MessageBox.Show("切换摄像头失败。", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
             }
         }
 

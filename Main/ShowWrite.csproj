@@ -7,7 +7,7 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Title>ShowWrite视频展台</Title>
-		<Version>2.0.2</Version>
+		<Version>2.1.3</Version>
 		<ApplicationIcon>icon-d1tools.com.ico</ApplicationIcon>
 	</PropertyGroup>
 	<ItemGroup>

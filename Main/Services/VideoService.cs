@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
 using AForge.Video;
 using AForge.Video.DirectShow;
@@ -11,9 +12,6 @@ namespace ShowWrite.Services
         private readonly object _frameLock = new();
         private Bitmap? _current;
         private DateTime _last = DateTime.MinValue;
-#pragma warning disable CS8618 // 在退出构造函数时，不可为 null 的字段必须包含非 null 值。请考虑添加 "required" 修饰符或声明为可为 null。
-        private VideoCaptureDevice _videoSource;
-#pragma warning restore CS8618 // 在退出构造函数时，不可为 null 的字段必须包含非 null 值。请考虑添加 "required" 修饰符或声明为可为 null。
         public const double MinFrameIntervalMs = 33; // ~30fps
 
         public event Action<Bitmap>? OnNewFrameProcessed; // 已限制频率
@@ -52,17 +50,22 @@ namespace ShowWrite.Services
             }
         }
 
-        public void AutoFocus()//自动对焦
+        public void AutoFocus() //自动对焦
         {
-            // 如果你用 AForge，可以这样写
-            if (_videoSource is VideoCaptureDevice device)
+            if (_device == null) return; // 确保设备存在
+
+            try
             {
-                try
-                {
-                    device.SetCameraProperty(CameraControlProperty.Focus,
-                        0, CameraControlFlags.Auto);  // 打开自动对焦
-                }
-                catch { }
+                // 修复：直接使用 _device 字段
+                _device.SetCameraProperty(
+                    CameraControlProperty.Focus,
+                    0,
+                    CameraControlFlags.Auto  // 打开自动对焦
+                );
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"自动对焦失败: {ex.Message}");
             }
         }
 
@@ -76,16 +79,16 @@ namespace ShowWrite.Services
             }
         }
 
-        public List<string> GetAvailableCameras()//切换摄像头（获取摄像头列表）
-                                                 //c#之父保佑我！！
+        public List<string> GetAvailableCameras()
         {
             var devices = new List<string>();
-            for (int i = 0; ; i++)
+            var deviceCollection = new FilterInfoCollection(FilterCategory.VideoInputDevice);
+
+            for (int i = 0; i < deviceCollection.Count; i++)
             {
                 try
                 {
-                    var cap = new VideoCaptureDevice(new FilterInfoCollection(FilterCategory.VideoInputDevice)[i].MonikerString);
-                    devices.Add(new FilterInfoCollection(FilterCategory.VideoInputDevice)[i].Name);
+                    devices.Add(deviceCollection[i].Name);
                 }
                 catch
                 {
@@ -98,7 +101,11 @@ namespace ShowWrite.Services
         public void Dispose()
         {
             Stop();
-            lock (_frameLock) { _current?.Dispose(); _current = null; }
+            lock (_frameLock)
+            {
+                _current?.Dispose();
+                _current = null;
+            }
         }
     }
 }
