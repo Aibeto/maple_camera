@@ -1,26 +1,4 @@
-////////////////////////////////////////////////////////////////////
-//                          _ooOoo_                               //
-//                         o8888888o                              //
-//                         88" . "88                              //
-//                         (| ^_^ |)                              //
-//                         O\  =  /O                              //
-//                      ____/`---'\____                           //
-//                    .'  \\|     |//  `.                         //
-//                   /  \\|||  :  |||//  \                        //
-//                  /  _||||| -:- |||||-  \                       //
-//                  |   | \\\  -  /// |   |                       //
-//                  | \_|  ''\---/''  |   |                       //
-//                  \  .-\__  `-`  ___/-. /                       //
-//                ___`. .'  /--.--\  `. . ___                     //
-//              ."" '<  `.___\_<|>_/___.'  >'"".                  //
-//            | | :  `- \`.;`\ _ /`;.`/ - ` : | |                 //
-//            \  \ `-.   \_ __\ /__ _/   .-` /  /                 //
-//      ========`-.____`-.___\_____/___.-`____.-'========         //
-//                           `=---='                              //
-//      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^        //
-//         佛祖保佑       永无BUG     永不修改                       //
-////////////////////////////////////////////////////////////////////
-using AForge; // IntPoint
+﻿using AForge; // IntPoint
 using AForge.Imaging.Filters;
 using Newtonsoft.Json;
 using ShowWrite.Models;
@@ -29,8 +7,10 @@ using ShowWrite.Views;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
@@ -39,6 +19,9 @@ using System.Windows.Ink;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using ZXing;
+using ZXing.Common;
+using ZXing.QrCode;
 using Cursors = System.Windows.Input.Cursors;
 using D = System.Drawing;
 using MessageBox = System.Windows.MessageBox;
@@ -114,11 +97,13 @@ namespace ShowWrite
             Ink.PreviewMouseLeftButtonUp += Ink_PreviewMouseUp;
             Ink.PreviewStylusDown += Ink_PreviewStylusDown;
             Ink.PreviewStylusUp += Ink_PreviewStylusUp;
+            Ink.EraserShape = new RectangleStylusShape(20, 20);
+
 
             // 仅用于橡皮：画笔在 StrokeCollected 里处理，避免重复/时序问题
             Ink.Strokes.StrokesChanged += Ink_StrokesChanged;
 
-            SetMode(ToolMode.Pen, initial: true);
+            SetMode(ToolMode.Move, initial: true);
 
             _videoService.OnNewFrameProcessed += frame =>
             {
@@ -497,6 +482,144 @@ namespace ShowWrite
             }
         }
 
+        private void VideoArea_MouseDoubleClick(object sender, MouseButtonEventArgs e)// 双击触发自动对焦
+        {
+            if (_currentMode == ToolMode.Move)
+            {
+                try
+                {
+                    _videoService.AutoFocus();
+                    MessageBox.Show("已触发自动对焦。", "对焦");
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("自动对焦失败: " + ex.Message, "错误");
+                }
+            }
+        }
+
+        // ① 从 Bitmap 构建 ZXing 的 BinaryBitmap 并解码（支持 QR/条码）
+        private ZXing.Result? DecodeBarcodeFromBitmap(D.Bitmap src)
+        {
+            // 统一为 24bpp 方便处理
+            using var bmp24 = new D.Bitmap(src.Width, src.Height, D.Imaging.PixelFormat.Format24bppRgb);
+            using (var g = D.Graphics.FromImage(bmp24))
+            {
+                g.DrawImage(src, 0, 0, bmp24.Width, bmp24.Height);
+            }
+
+            var rect = new D.Rectangle(0, 0, bmp24.Width, bmp24.Height);
+            var data = bmp24.LockBits(rect, ImageLockMode.ReadOnly, D.Imaging.PixelFormat.Format24bppRgb);
+
+            try
+            {
+                int stride = Math.Abs(data.Stride);
+                int length = stride * bmp24.Height;
+                byte[] buffer = new byte[length];
+                Marshal.Copy(data.Scan0, buffer, 0, length);
+
+                // BGR24 对应的格式
+                var luminance = new RGBLuminanceSource(buffer, bmp24.Width, bmp24.Height, RGBLuminanceSource.BitmapFormat.BGR24);
+                var binary = new BinaryBitmap(new HybridBinarizer(luminance));
+
+                // 更“努力”的识别 + 常见格式
+                var reader = new MultiFormatReader();
+                var hints = new Dictionary<DecodeHintType, object>
+        {
+            { DecodeHintType.TRY_HARDER, true },
+            { DecodeHintType.POSSIBLE_FORMATS, new[]
+                {
+                    BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.AZTEC,
+                    BarcodeFormat.PDF_417, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
+                    BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A
+                }
+            }
+        };
+
+                return reader.decode(binary, hints);
+            }
+            catch (ReaderException)
+            {
+                return null;
+            }
+            finally
+            {
+                bmp24.UnlockBits(data);
+            }
+        }
+
+        // ② “扫一扫”点击事件（会自动应用你的透视校正以提高识别率）
+        private void ScanQRCode_Click(object sender, RoutedEventArgs e)
+        {
+            var frame = _videoService.GetFrameCopy();
+            if (frame == null) return;
+
+            D.Bitmap? corrected = null;
+            try
+            {
+                var target = frame;
+                if (_perspectiveCorrectionFilter != null)
+                {
+                    corrected = _perspectiveCorrectionFilter.Apply(frame);
+                    target = corrected;
+                }
+
+                var result = DecodeBarcodeFromBitmap(target);
+                if (result != null)
+                {
+                    // 识别成功：复制到剪贴板并提示
+                    System.Windows.Clipboard.SetText(result.Text ?? string.Empty);
+                    MessageBox.Show($"识别到：{result.BarcodeFormat}\n\n{result.Text}\n\n(已复制到剪贴板)", "扫一扫");
+                }
+                else
+                {
+                    MessageBox.Show("未检测到二维码/条码。", "扫一扫");
+                }
+            }
+            finally
+            {
+                corrected?.Dispose();
+                frame.Dispose();
+            }
+        }
+
+        private void ScanDocument_Click(object sender, RoutedEventArgs e)// 扫描文档
+        {
+            var bmp = _videoService.GetFrameCopy();
+            if (bmp == null) return;
+
+            D.Bitmap? processed = null;
+            try
+            {
+                // 先走透视校正
+                processed = ProcessFrame(bmp, applyAdjustments: true);
+
+                // 转灰度
+                var gray = AForge.Imaging.Filters.Grayscale.CommonAlgorithms.BT709.Apply(processed);
+
+                // 自适应阈值（二值化效果类似扫描件）
+                var threshold = new AForge.Imaging.Filters.BradleyLocalThresholding
+                {
+                    WindowSize = 41,
+                    PixelBrightnessDifferenceLimit = 0.1f
+                };
+                threshold.ApplyInPlace(gray);
+
+                // 转换为 BitmapImage 放入照片列表
+                var img = BitmapToBitmapImage(gray);
+                var photo = new CapturedImage(img);
+                _photos.Insert(0, photo);
+                _currentPhoto = photo;
+
+                ShowPhotoTip();
+            }
+            finally
+            {
+                bmp.Dispose();
+                processed?.Dispose();
+            }
+        }
+
         // =========================
         // 画面调节窗口（不写入 config）
         // =========================
@@ -700,4 +823,3 @@ namespace ShowWrite
         }
     }
 }
-

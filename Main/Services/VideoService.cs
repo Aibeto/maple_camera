@@ -11,6 +11,9 @@ namespace ShowWrite.Services
         private readonly object _frameLock = new();
         private Bitmap? _current;
         private DateTime _last = DateTime.MinValue;
+#pragma warning disable CS8618 // 在退出构造函数时，不可为 null 的字段必须包含非 null 值。请考虑添加 "required" 修饰符或声明为可为 null。
+        private VideoCaptureDevice _videoSource;
+#pragma warning restore CS8618 // 在退出构造函数时，不可为 null 的字段必须包含非 null 值。请考虑添加 "required" 修饰符或声明为可为 null。
         public const double MinFrameIntervalMs = 33; // ~30fps
 
         public event Action<Bitmap>? OnNewFrameProcessed; // 已限制频率
@@ -46,6 +49,20 @@ namespace ShowWrite.Services
             lock (_frameLock)
             {
                 return _current == null ? null : new Bitmap(_current);
+            }
+        }
+
+        public void AutoFocus()//自动对焦
+        {
+            // 如果你用 AForge，可以这样写
+            if (_videoSource is VideoCaptureDevice device)
+            {
+                try
+                {
+                    device.SetCameraProperty(CameraControlProperty.Focus,
+                        0, CameraControlFlags.Auto);  // 打开自动对焦
+                }
+                catch { }
             }
         }
 

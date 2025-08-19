@@ -14,13 +14,14 @@
 
         <!-- 视频与墨迹 -->
         <Grid Grid.Row="0"
-              ClipToBounds="True"
-              IsManipulationEnabled="True"
-              ManipulationStarting="VideoArea_ManipulationStarting"
-              ManipulationDelta="VideoArea_ManipulationDelta"
-              MouseDown="VideoArea_MouseDown"
-              MouseMove="VideoArea_MouseMove"
-              MouseUp="VideoArea_MouseUp">
+            ClipToBounds="True"
+            IsManipulationEnabled="True"
+            ManipulationStarting="VideoArea_ManipulationStarting"
+            ManipulationDelta="VideoArea_ManipulationDelta"
+            MouseDown="VideoArea_MouseDown"
+            MouseMove="VideoArea_MouseMove"
+            MouseUp="VideoArea_MouseUp">
+
             <Grid.RenderTransform>
                 <TransformGroup>
                     <ScaleTransform x:Name="ZoomTransform" ScaleX="1" ScaleY="1" />
@@ -79,7 +80,18 @@
                         <TextBlock Text="拍照" Foreground="White"/>
                     </StackPanel>
                 </Button>
-
+                <Button Click="ScanDocument_Click" Margin="5" Width="90" Height="40">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Image Source="icons/correction.png" Width="20" Height="20" Margin="0,0,5,0"/>
+                        <TextBlock Text="扫描" Foreground="White"/>
+                    </StackPanel>
+                </Button>
+                <Button Click="ScanQRCode_Click" Margin="5" Width="90" Height="40">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Image Source="icons/switch_camera.png" Width="20" Height="20" Margin="0,0,5,0"/>
+                        <TextBlock Text="扫一扫" Foreground="White"/>
+                    </StackPanel>
+                </Button>
                 <StackPanel>
                     <Button x:Name="PhotoBtn" Click="TogglePhotoPanel_Click" Margin="5" Width="90" Height="40">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -121,7 +133,7 @@
                                 <Image Source="icons/correction.png" Width="16" Height="16"/>
                             </MenuItem.Icon>
                         </MenuItem>
-
+                        
                         <MenuItem Header="退出" Click="Exit_Click">
                             <MenuItem.Icon>
                                 <Image Source="icons/exit.png" Width="16" Height="16"/>
@@ -160,20 +172,21 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
                     <!-- 底部按钮 -->
-                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Center" Margin="10">
-                        <Button Click="BackToLive_Click" Margin="5" Width="90" Height="40">
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Vertical" HorizontalAlignment="Center" Margin="10">
+                        <Button Click="BackToLive_Click" Margin="5" Width="100" Height="40">
                             <StackPanel Orientation="Horizontal">
-                                <Image Source="icons/startup_image.png" Width="20" Height="20" Margin="0,0,5,0"/>
+                                <Image Source="icons/startup_image.png" Width="10" Height="20" Margin="0,0,5,0"/>
                                 <TextBlock Text="返回实时" Foreground="White"/>
                             </StackPanel>
                         </Button>
-                        <Button Click="SaveImage_Click" Margin="5" Width="90" Height="40">
+                        <Button Click="SaveImage_Click" Margin="5" Width="100" Height="40">
                             <StackPanel Orientation="Horizontal">
-                                <Image Source="icons/save.png" Width="20" Height="20" Margin="0,0,5,0"/>
+                                <Image Source="icons/save.png" Width="10" Height="20" Margin="0,0,5,0"/>
                                 <TextBlock Text="保存图片" Foreground="White"/>
                             </StackPanel>
                         </Button>
                     </StackPanel>
+
                 </DockPanel>
             </Border>
         </Popup>
