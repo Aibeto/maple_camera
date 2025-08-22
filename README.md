@@ -7,7 +7,7 @@
 [Github Releases](https://github.com/wwcrdrvf6u/ShowWrite/releases/)
 # 关于Show Write
 ## 版本号命名
-为兼容希沃视频展台的原生启动器（**sweclcuncher**），以便支持从侧边栏或中控菜单直接启动 **Show Write**，我们将应用的版本号格式调整为与希沃视频展台一致的风格。
+为兼容希沃视频展台的原生启动器（**sweclauncher**），以便支持从侧边栏或中控菜单直接启动 **Show Write**，我们将应用的版本号格式调整为与希沃视频展台一致的风格。
 **示例：**
 ```
 EasiCamera_2.1.1.8888
