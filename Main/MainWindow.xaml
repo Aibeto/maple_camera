@@ -11,9 +11,8 @@
             <RowDefinition />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-
         <!-- 视频与墨迹 -->
-        <Grid Grid.Row="0"
+        <Grid x:Name="VideoArea" Grid.Row="0"
             ClipToBounds="True"
             IsManipulationEnabled="True"
             ManipulationStarting="VideoArea_ManipulationStarting"
@@ -21,7 +20,6 @@
             MouseDown="VideoArea_MouseDown"
             MouseMove="VideoArea_MouseMove"
             MouseUp="VideoArea_MouseUp">
-
             <Grid.RenderTransform>
                 <TransformGroup>
                     <ScaleTransform x:Name="ZoomTransform" ScaleX="1" ScaleY="1" />
@@ -31,11 +29,9 @@
             <Image x:Name="VideoImage" Stretch="Uniform" />
             <InkCanvas x:Name="Ink" Background="Transparent" />
         </Grid>
-
         <!-- 底部主菜单 -->
         <DockPanel Grid.Row="1" Background="#2C3E50" LastChildFill="True">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="10">
-
                 <!-- 移动 / 画笔 / 橡皮擦 -->
                 <ToggleButton x:Name="MoveBtn" Click="MoveBtn_Click" Margin="5" Width="90" Height="40">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -43,21 +39,18 @@
                         <TextBlock Text="移动" Foreground="White"/>
                     </StackPanel>
                 </ToggleButton>
-
                 <ToggleButton x:Name="PenBtn" Click="PenBtn_Click" Margin="5" Width="90" Height="40">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                         <Image Source="icons/pen.png" Width="20" Height="20" Margin="0,0,5,0"/>
                         <TextBlock Text="画笔" Foreground="White"/>
                     </StackPanel>
                 </ToggleButton>
-
                 <ToggleButton x:Name="EraserBtn" Click="EraserBtn_Click" Margin="5" Width="90" Height="40">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                         <Image Source="icons/eraser.png" Width="20" Height="20" Margin="0,0,5,0"/>
                         <TextBlock Text="橡皮擦" Foreground="White"/>
                     </StackPanel>
                 </ToggleButton>
-
                 <!-- 撤回 / 清屏 -->
                 <Button Click="UndoInk_Click" Margin="5" Width="90" Height="40">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -65,14 +58,12 @@
                         <TextBlock Text="撤销" Foreground="White"/>
                     </StackPanel>
                 </Button>
-
                 <Button Click="ClearInk_Click" Margin="5" Width="90" Height="40">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                         <Image Source="icons/clear.png" Width="20" Height="20" Margin="0,0,5,0"/>
                         <TextBlock Text="清屏" Foreground="White"/>
                     </StackPanel>
                 </Button>
-
                 <!-- 拍照 / 照片 -->
                 <Button Click="Capture_Click" Margin="5" Width="90" Height="40">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -105,7 +96,6 @@
                         </Border>
                     </Popup>
                 </StackPanel>
-
                 <!-- 更多按钮（弹出菜单） -->
                 <Menu>
                     <MenuItem Width="90" Height="49">
@@ -115,19 +105,16 @@
                                 <TextBlock Text="更多" Foreground="White"/>
                             </StackPanel>
                         </MenuItem.Header>
-
                         <MenuItem Header="切换摄像头" Click="SwitchCamera_Click">
                             <MenuItem.Icon>
                                 <Image Source="icons/switch_camera.png" Width="16" Height="16"/>
                             </MenuItem.Icon>
                         </MenuItem>
-
                         <MenuItem Header="画面调节" Click="OpenAdjustVideo_Click">
                             <MenuItem.Icon>
                                 <Image Source="icons/startup_image.png" Width="16" Height="16"/>
                             </MenuItem.Icon>
                         </MenuItem>
-
                         <MenuItem Header="梯形校正" Click="OpenPerspectiveCorrection_Click">
                             <MenuItem.Icon>
                                 <Image Source="icons/correction.png" Width="16" Height="16"/>
@@ -146,7 +133,6 @@
                         </MenuItem>
                     </MenuItem>
                 </Menu>
-
                 <!-- 最小化 -->
                 <Button Click="Minimize_Click" Margin="5" Width="90" Height="40">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -154,10 +140,8 @@
                         <TextBlock Text="最小化" Foreground="White"/>
                     </StackPanel>
                 </Button>
-
             </StackPanel>
         </DockPanel>
-
         <!-- 照片悬浮窗 -->
         <Popup x:Name="PhotoPopup" PlacementTarget="{Binding ElementName=PhotoBtn}" Placement="Left" StaysOpen="False">
             <Border Width="400" Height="500" Background="#2C3E50" CornerRadius="6" BorderBrush="White" BorderThickness="1">
@@ -191,7 +175,6 @@
                             </StackPanel>
                         </Button>
                     </StackPanel>
-
                 </DockPanel>
             </Border>
         </Popup>

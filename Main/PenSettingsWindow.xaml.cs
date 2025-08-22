@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using System.Windows.Media;
+using System.Windows.Controls;
 using WinForms = System.Windows.Forms;
 
 namespace ShowWrite
@@ -7,39 +8,60 @@ namespace ShowWrite
     public partial class PenSettingsWindow : Window
     {
         public System.Windows.Media.Color SelectedColor { get; private set; }
-        public double SelectedWidth { get; private set; }
+        public double SelectedPenWidth { get; private set; }
+        public double SelectedEraserWidth { get; private set; }
 
-        public PenSettingsWindow(System.Windows.Media.Color currentColor, double currentWidth)
+        public PenSettingsWindow(System.Windows.Media.Color currentColor, double currentPenWidth, double currentEraserWidth)
         {
             InitializeComponent();
 
             SelectedColor = currentColor;
-            SelectedWidth = currentWidth;
+            SelectedPenWidth = currentPenWidth;
+            SelectedEraserWidth = currentEraserWidth;
 
-            ColorPreview.Background = new SolidColorBrush(SelectedColor);
-            WidthSlider.Value = SelectedWidth;
-            WidthValue.Text = $"宽度: {SelectedWidth}";
+            // 初始化UI
+            PenColorPreview.Background = new SolidColorBrush(SelectedColor);
+            PenWidthSlider.Value = SelectedPenWidth;
+            PenWidthValue.Text = SelectedPenWidth.ToString();
+            EraserWidthSlider.Value = SelectedEraserWidth;
+            EraserWidthValue.Text = SelectedEraserWidth.ToString();
 
-            WidthSlider.ValueChanged += (s, e) =>
+            // 绑定滑块值变化事件
+            PenWidthSlider.ValueChanged += (s, e) =>
             {
-                WidthValue.Text = $"宽度: {(int)e.NewValue}";
+                PenWidthValue.Text = ((int)e.NewValue).ToString();
+            };
+
+            EraserWidthSlider.ValueChanged += (s, e) =>
+            {
+                EraserWidthValue.Text = ((int)e.NewValue).ToString();
             };
         }
 
-        private void ColorButton_Click(object sender, RoutedEventArgs e)
+        private void ColorPreview_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (sender is Border border && border.Tag is string colorHex)
+            {
+                SelectedColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(colorHex);
+                PenColorPreview.Background = new SolidColorBrush(SelectedColor);
+            }
+        }
+
+        private void CustomColorButton_Click(object sender, RoutedEventArgs e)
         {
             var dlg = new WinForms.ColorDialog();
             dlg.Color = System.Drawing.Color.FromArgb(SelectedColor.A, SelectedColor.R, SelectedColor.G, SelectedColor.B);
             if (dlg.ShowDialog() == WinForms.DialogResult.OK)
             {
                 SelectedColor = System.Windows.Media.Color.FromArgb(dlg.Color.A, dlg.Color.R, dlg.Color.G, dlg.Color.B);
-                ColorPreview.Background = new SolidColorBrush(SelectedColor);
+                PenColorPreview.Background = new SolidColorBrush(SelectedColor);
             }
         }
 
         private void Ok_Click(object sender, RoutedEventArgs e)
         {
-            SelectedWidth = WidthSlider.Value;
+            SelectedPenWidth = PenWidthSlider.Value;
+            SelectedEraserWidth = EraserWidthSlider.Value;
             DialogResult = true;
         }
 
