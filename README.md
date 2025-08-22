@@ -6,6 +6,8 @@
 ## 下载
 [Github Releases](https://github.com/wwcrdrvf6u/ShowWrite/releases/)
 # 关于Show Write
+## 我们的设计理念
+**用户能改的，我们绝对不改**（指 让用户自己改源码）
 ## 版本号命名
 为兼容希沃视频展台的原生启动器（**sweclauncher**），以便支持从侧边栏或中控菜单直接启动 **Show Write**，我们将应用的版本号格式调整为与希沃视频展台一致的风格。
 **示例：**
