@@ -1,0 +1,29 @@
+name: maple_camera
+description: A new Flutter project.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  camera: ^0.10.0
+  path_provider: ^2.0.15
+  video_player: ^2.7.0
+  image: ^4.0.17
+  permission_handler: ^10.2.0
+  fluttertoast: ^8.2.1
+  shared_preferences: ^2.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - icons/
+    - Main/icons/
